@@ -206,7 +206,7 @@ interface BookPaneProps {
   onMouseDown: () => void
 }
 
-function useAutoHide(iframe: Window | null) {
+function useAutoHide(iframe: any) {
   const [visible, setVisible] = useState(false)
   const timer = useRef<any>(null)
 
