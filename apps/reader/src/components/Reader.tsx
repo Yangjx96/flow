@@ -37,8 +37,8 @@ import {
   setClickedAnnotation,
   Annotations,
 } from './Annotation'
+import { SelectionPopup } from './SelectionPopup'
 import { Tab } from './Tab'
-import { TextSelectionMenu } from './TextSelectionMenu'
 import { DropZone, SplitView, useDndContext, useSplitViewItem } from './base'
 import * as pages from './pages'
 
@@ -285,17 +285,6 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
 
   useEventListener(iframe, 'mousedown', onMouseDown)
 
-  // Forward epub iframe selection to parent for TTS userscript integration
-  useEventListener(iframe, 'mouseup', () => {
-    const sel = iframe?.getSelection()
-    const text = sel?.toString().trim()
-    if (text) {
-      document.dispatchEvent(
-        new CustomEvent('flow:text-selected', { detail: { text } }),
-      )
-    }
-  })
-
   useEventListener(iframe, 'click', (e) => {
     // https://developer.chrome.com/blog/tap-to-search
     e.preventDefault()
@@ -418,7 +407,7 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
             background,
           )}
         />
-        <TextSelectionMenu tab={tab} />
+        <SelectionPopup tab={tab} />
         <Annotations tab={tab} />
       </div>
       <ReaderPaneFooter tab={tab} />

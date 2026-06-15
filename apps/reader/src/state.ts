@@ -63,3 +63,35 @@ const settingsState = atom<Settings>({
 export function useSettings() {
   return useRecoilState(settingsState)
 }
+
+export interface TtsConfig {
+  enabled: boolean
+  translateEnabled: boolean
+  shortApi: { url: string; key: string }
+  longApi: { url: string; key: string }
+  model: string
+  voice: string
+  speed: number
+  threshold: number
+}
+
+export const defaultTtsConfig: TtsConfig = {
+  enabled: true,
+  translateEnabled: true,
+  shortApi: { url: '', key: '' },
+  longApi: { url: '', key: '' },
+  model: 'tts-1',
+  voice: 'alloy',
+  speed: 1.0,
+  threshold: 2,
+}
+
+const ttsConfigState = atom<TtsConfig>({
+  key: 'ttsConfig',
+  default: defaultTtsConfig,
+  effects: [localStorageEffect('ttsConfig', defaultTtsConfig)],
+})
+
+export function useTtsConfig() {
+  return useRecoilState(ttsConfigState)
+}
