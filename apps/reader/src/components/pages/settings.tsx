@@ -140,16 +140,16 @@ const TtsSettings: React.FC = () => {
           <TextField
             name="URL"
             defaultValue={cfg.shortApi.url}
-            onBlur={(e) =>
-              updateShort({ url: (e.target as HTMLInputElement).value })
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+              updateShort({ url: e.target.value })
             }
             placeholder="https://api.example.com/v1/audio/speech"
           />
           <TextField
             name="Key"
             defaultValue={cfg.shortApi.key}
-            onBlur={(e) =>
-              updateShort({ key: (e.target as HTMLInputElement).value })
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+              updateShort({ key: e.target.value })
             }
             placeholder="sk-..."
           />
@@ -160,16 +160,16 @@ const TtsSettings: React.FC = () => {
           <TextField
             name="URL"
             defaultValue={cfg.longApi.url}
-            onBlur={(e) =>
-              updateLong({ url: (e.target as HTMLInputElement).value })
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+              updateLong({ url: e.target.value })
             }
             placeholder="https://api.example.com/v1/audio/speech"
           />
           <TextField
             name="Key"
             defaultValue={cfg.longApi.key}
-            onBlur={(e) =>
-              updateLong({ key: (e.target as HTMLInputElement).value })
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+              updateLong({ key: e.target.value })
             }
             placeholder="sk-..."
           />
