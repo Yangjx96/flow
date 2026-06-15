@@ -414,7 +414,7 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
       <div
         ref={ref}
         className={clsx('relative flex-1', isTouchScreen || 'h-0')}
-        style={{ colorScheme: 'auto' }}
+        style={{ colorScheme: 'auto', maxWidth: 800, marginInline: 'auto', width: '100%' }}
       >
         <div
           className={clsx(

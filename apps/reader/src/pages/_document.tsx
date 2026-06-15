@@ -8,7 +8,8 @@ export default function Document() {
     <Html className="bg-default">
       <Head>
         <GoogleTagManager />
-        <link rel="icon" href="/icons/192.png"></link>
+        <link rel="icon" type="image/svg+xml" href="/icon.svg"></link>
+        <link rel="icon" type="image/png" href="/icons/192.png"></link>
         <PWA />
         <PreventFlash />
       </Head>

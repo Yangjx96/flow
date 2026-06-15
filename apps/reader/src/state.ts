@@ -47,17 +47,17 @@ interface ThemeConfiguration {
 }
 
 export const defaultSettings: Settings = {
-  fontFamily: '"Times New Roman", Georgia, "Noto Serif", serif',
-  fontSize: '18px',
-  lineHeight: 1.6,
+  fontFamily: '"Georgia", "Noto Serif", "Times New Roman", serif',
+  fontSize: '20px',
+  lineHeight: 1.8,
   spread: RenditionSpread.None,
   enableTextSelectionMenu: false,
 }
 
 const settingsState = atom<Settings>({
-  key: 'settings',
+  key: 'settingsV2',
   default: defaultSettings,
-  effects: [localStorageEffect('settings', defaultSettings)],
+  effects: [localStorageEffect('settingsV2', defaultSettings)],
 })
 
 export function useSettings() {
