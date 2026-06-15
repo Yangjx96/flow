@@ -62,15 +62,13 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     }
   }, [iframe])
 
-  // auto-play TTS
   useEffect(() => {
-    if (!popup?.text || !ttsConfig.enabled) return
+    if (!popup?.text || !ttsConfig.ttsEnabled) return
     playTts(popup.text, ttsConfig)
   }, [popup?.text])
 
-  // auto-translate
   useEffect(() => {
-    if (!popup?.text || !ttsConfig.translateEnabled || !ttsConfig.enabled) {
+    if (!popup?.text || !ttsConfig.translateEnabled) {
       setTranslation('')
       return
     }
@@ -85,7 +83,6 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     })
   }, [popup?.text])
 
-  // dismiss on outside click
   useEffect(() => {
     if (!popup) return
     const onClick = (e: MouseEvent) => {
@@ -97,11 +94,12 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     return () => document.removeEventListener('mousedown', onClick)
   }, [popup])
 
-  if (!popup || !ttsConfig.enabled) return null
+  const active = ttsConfig.ttsEnabled || ttsConfig.translateEnabled
+  if (!popup || !active) return null
 
-  const w = 280
+  const w = 300
   const margin = 8
-  const h = popupRef.current?.offsetHeight || 80
+  const h = popupRef.current?.offsetHeight || 60
 
   let left = popup.x - w / 2
   let top = popup.y - h - margin
@@ -114,27 +112,64 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   return (
     <div
       ref={popupRef}
-      className="bg-surface text-on-surface shadow-1 fixed z-50 rounded-lg border border-outline-variant/20 p-3"
-      style={{ left, top, width: w, maxWidth: 'calc(100vw - 16px)' }}
+      className="fixed z-50"
+      style={{
+        left,
+        top,
+        width: w,
+        maxWidth: 'calc(100vw - 16px)',
+        background: 'rgba(255,255,255,0.97)',
+        borderRadius: 8,
+        boxShadow: '0 2px 16px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
+        padding: '10px 14px',
+        backdropFilter: 'blur(8px)',
+      }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="typescale-body-small text-outline break-all leading-snug">
-          {popup.text}
-        </span>
-        <button
-          className="text-primary shrink-0 rounded p-0.5 hover:opacity-70"
-          onClick={(e) => {
-            e.stopPropagation()
-            playTts(popup.text, ttsConfig)
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span
+          style={{
+            flex: 1,
+            fontSize: 13,
+            color: '#666',
+            lineHeight: 1.3,
+            wordBreak: 'break-word',
           }}
         >
-          <MdVolumeUp size={18} />
-        </button>
+          {popup.text.length > 80
+            ? popup.text.slice(0, 80) + '...'
+            : popup.text}
+        </span>
+        {ttsConfig.ttsEnabled && ttsConfig.ttsApi.url && (
+          <button
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 2,
+              color: '#555',
+              flexShrink: 0,
+            }}
+            onClick={(e) => {
+              e.stopPropagation()
+              playTts(popup.text, ttsConfig)
+            }}
+          >
+            <MdVolumeUp size={16} />
+          </button>
+        )}
       </div>
-      {(loading || translation) && (
-        <div className="typescale-body-medium text-on-surface mt-2 whitespace-pre-wrap leading-relaxed">
+      {ttsConfig.translateEnabled && (
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 14,
+            lineHeight: 1.5,
+            color: '#222',
+            whiteSpace: 'pre-wrap',
+          }}
+        >
           {loading ? (
-            <span className="text-outline animate-pulse">...</span>
+            <span style={{ color: '#999' }}>...</span>
           ) : (
             translation
           )}

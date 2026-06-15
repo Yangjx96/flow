@@ -2,12 +2,62 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import https from 'https'
 import http from 'http'
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { text, apiUrl, apiKey } = req.body
-  if (!text || !apiUrl || !apiKey) return res.status(400).end()
+  const { text, method, apiUrl, apiKey } = req.body
+  if (!text) return res.status(400).end()
 
+  if (method === 'llm' && apiUrl && apiKey) {
+    return llmTranslate(text, apiUrl, apiKey, res)
+  }
+  return googleTranslate(text, res)
+}
+
+async function googleTranslate(text: string, res: NextApiResponse) {
+  const params = new URLSearchParams({
+    client: 'gtx',
+    sl: 'en',
+    tl: 'zh-CN',
+    dt: 't',
+    q: text,
+  })
+  const url = `https://translate.googleapis.com/translate_a/single?${params}`
+
+  try {
+    const body = await new Promise<string>((resolve, reject) => {
+      https
+        .get(url, (r) => {
+          const chunks: Buffer[] = []
+          r.on('data', (c: Buffer) => chunks.push(c))
+          r.on('end', () => resolve(Buffer.concat(chunks).toString()))
+          r.on('error', reject)
+        })
+        .on('error', reject)
+    })
+
+    const data = JSON.parse(body)
+    const sentences = data?.[0]
+    if (!Array.isArray(sentences)) {
+      res.json({ translation: '' })
+      return
+    }
+    const translation = sentences.map((s: any) => s?.[0] || '').join('')
+    res.json({ translation })
+  } catch {
+    res.status(502).json({ translation: '' })
+  }
+}
+
+function llmTranslate(
+  text: string,
+  apiUrl: string,
+  apiKey: string,
+  res: NextApiResponse,
+) {
   const url = new URL(apiUrl)
   const client = url.protocol === 'https:' ? https : http
   const payload = JSON.stringify({

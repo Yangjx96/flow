@@ -39,12 +39,15 @@ export const Layout: React.FC = ({ children }) => {
     setReady(true)
   }, [mobile, setAction])
 
+  const r = useReaderSnapshot()
+  const readMode = r.focusedTab?.isBook
+
   return (
     <div id="layout" className="select-none">
       <SplitView>
-        {mobile === false && <ActivityBar />}
+        {mobile === false && !readMode && <ActivityBar />}
         {mobile === true && <NavigationBar />}
-        {ready && <SideBar />}
+        {ready && !readMode && <SideBar />}
         {ready && <Reader>{children}</Reader>}
       </SplitView>
     </div>

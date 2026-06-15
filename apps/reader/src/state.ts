@@ -65,31 +65,29 @@ export function useSettings() {
 }
 
 export interface TtsConfig {
-  enabled: boolean
+  ttsEnabled: boolean
   translateEnabled: boolean
-  shortApi: { url: string; key: string }
-  longApi: { url: string; key: string }
-  model: string
+  translateMethod: 'google' | 'llm'
+  llmApi: { url: string; key: string }
+  ttsApi: { url: string; key: string }
   voice: string
   speed: number
-  threshold: number
 }
 
 export const defaultTtsConfig: TtsConfig = {
-  enabled: true,
+  ttsEnabled: false,
   translateEnabled: true,
-  shortApi: { url: '', key: '' },
-  longApi: { url: '', key: '' },
-  model: 'tts-1',
+  translateMethod: 'google',
+  llmApi: { url: '', key: '' },
+  ttsApi: { url: '', key: '' },
   voice: 'alloy',
   speed: 1.0,
-  threshold: 2,
 }
 
 const ttsConfigState = atom<TtsConfig>({
-  key: 'ttsConfig',
+  key: 'ttsConfig2',
   default: defaultTtsConfig,
-  effects: [localStorageEffect('ttsConfig', defaultTtsConfig)],
+  effects: [localStorageEffect('ttsConfig2', defaultTtsConfig)],
 })
 
 export function useTtsConfig() {

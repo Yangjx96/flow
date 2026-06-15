@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react'
-import { MdChevronRight, MdWebAsset } from 'react-icons/md'
+import { MdChevronRight, MdClose, MdWebAsset } from 'react-icons/md'
 import { RiBookLine } from 'react-icons/ri'
 import { PhotoSlider } from 'react-photo-view'
 import { useSetRecoilState } from 'recoil'
@@ -88,7 +88,6 @@ function ReaderGroup({ index }: ReaderGroupProps) {
   const t = useTranslation()
 
   const { size } = useSplitViewItem(`${ReaderGroup.name}.${index}`, {
-    // to disable sash resize
     visible: false,
   })
 
@@ -96,43 +95,47 @@ function ReaderGroup({ index }: ReaderGroupProps) {
     reader.selectGroup(index)
   }, [index])
 
+  const r = useReaderSnapshot()
+  const readMode = r.focusedTab?.isBook
+
   return (
     <div
       className="ReaderGroup flex flex-1 flex-col overflow-hidden focus:outline-none"
       onMouseDown={handleMouseDown}
       style={{ width: size }}
     >
-      <Tab.List
-        className="hidden sm:flex"
-        onDelete={() => reader.removeGroup(index)}
-      >
-        {tabs.map((tab, i) => {
-          const selected = i === selectedIndex
-          const focused = index === focusedIndex && selected
-          return (
-            <Tab
-              key={tab.id}
-              selected={selected}
-              focused={focused}
-              onClick={() => group.selectTab(i)}
-              onDelete={() => reader.removeTab(i, index)}
-              Icon={tab instanceof BookTab ? RiBookLine : MdWebAsset}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData('text/plain', `${index},${i}`)
-              }}
-            >
-              {tab.isBook ? tab.title : t(`${tab.title}.title`)}
-            </Tab>
-          )
-        })}
-      </Tab.List>
+      {!readMode && (
+        <Tab.List
+          className="hidden sm:flex"
+          onDelete={() => reader.removeGroup(index)}
+        >
+          {tabs.map((tab, i) => {
+            const selected = i === selectedIndex
+            const focused = index === focusedIndex && selected
+            return (
+              <Tab
+                key={tab.id}
+                selected={selected}
+                focused={focused}
+                onClick={() => group.selectTab(i)}
+                onDelete={() => reader.removeTab(i, index)}
+                Icon={tab instanceof BookTab ? RiBookLine : MdWebAsset}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/plain', `${index},${i}`)
+                }}
+              >
+                {tab.isBook ? tab.title : t(`${tab.title}.title`)}
+              </Tab>
+            )
+          })}
+        </Tab.List>
+      )}
 
       <DropZone
         className={clsx('flex-1', isTouchScreen || 'h-0')}
         split
         onDrop={async (e, position) => {
-          // read `e.dataTransfer` first to avoid get empty value after `await`
           const files = e.dataTransfer.files
           let tabs = []
 
@@ -203,6 +206,32 @@ interface BookPaneProps {
   onMouseDown: () => void
 }
 
+function useAutoHide(iframe: Window | null) {
+  const [visible, setVisible] = useState(false)
+  const timer = useRef<any>(null)
+
+  const show = useCallback(() => {
+    setVisible(true)
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => setVisible(false), 2500)
+  }, [])
+
+  useEffect(() => {
+    const onMove = () => show()
+    document.addEventListener('mousemove', onMove)
+    return () => document.removeEventListener('mousemove', onMove)
+  }, [show])
+
+  useEffect(() => {
+    if (!iframe) return
+    const onMove = () => show()
+    iframe.addEventListener('mousemove', onMove)
+    return () => iframe.removeEventListener('mousemove', onMove)
+  }, [iframe, show])
+
+  return visible
+}
+
 function BookPane({ tab, onMouseDown }: BookPaneProps) {
   const ref = useRef<HTMLDivElement>(null)
   const prevSize = useRef(0)
@@ -210,7 +239,8 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
   const { dark } = useColorScheme()
   const [background] = useBackground()
 
-  const { iframe, rendition, rendered, container } = useSnapshot(tab)
+  const { iframe, rendition, rendered, container, book } = useSnapshot(tab)
+  const chromeVisible = useAutoHide(iframe)
 
   useEffect(() => {
     const el = ref.current
@@ -218,7 +248,6 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
 
     const observer = new ResizeObserver(([e]) => {
       const size = e?.contentRect.width ?? 0
-      // `display: hidden` will lead `rect` to 0
       if (size !== 0 && prevSize.current !== 0) {
         reader.resize()
       }
@@ -251,11 +280,6 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
   }, [tab])
 
   useEffect(() => {
-    /**
-     * when `spread` changes, we should call `spread()` to re-layout,
-     * then call {@link updateCustomStyle} to update custom style
-     * according to the latest layout
-     */
     rendition?.spread(typography.spread ?? RenditionSpread.Auto)
   }, [typography.spread, rendition])
 
@@ -263,7 +287,6 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
 
   useEffect(() => {
     if (dark === undefined) return
-    // set `!important` when in dark mode
     rendition?.themes.override('color', dark ? '#bfc8ca' : '#3f484a', dark)
   }, [rendition, dark])
 
@@ -278,7 +301,6 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
 
   const { setDragEvent } = useDndContext()
 
-  // `dragenter` not fired in iframe when the count of times is even, so use `dragover`
   useEventListener(iframe, 'dragover', (e: any) => {
     setDragEvent(e)
   })
@@ -286,11 +308,9 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
   useEventListener(iframe, 'mousedown', onMouseDown)
 
   useEventListener(iframe, 'click', (e) => {
-    // https://developer.chrome.com/blog/tap-to-search
     e.preventDefault()
 
     for (const el of e.composedPath() as any) {
-      // `instanceof` may not work in iframe
       if (el.tagName === 'A' && el.href) {
         tab.showPrevLocation()
         return
@@ -343,9 +363,6 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
 
     if (!iframe) return
 
-    // When selecting text with long tap, `touchend` is not fired,
-    // so instead of use `addEventlistener`, we should use `on*`
-    // to remove the previous listener.
     iframe.ontouchend = function handleTouchEnd(e: TouchEvent) {
       iframe.ontouchend = undefined
       const selection = iframe.getSelection()
@@ -382,6 +399,8 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
 
   useDisablePinchZooming(iframe)
 
+  const percentage = (book.percentage ?? 0) * 100
+
   return (
     <div className={clsx('flex h-full flex-col', mobile && 'py-[3vw]')}>
       <PhotoSlider
@@ -391,17 +410,15 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
         maskOpacity={0.6}
         bannerVisible={false}
       />
-      <ReaderPaneHeader tab={tab} />
+      <ReaderPaneHeader tab={tab} visible={chromeVisible} />
       <div
         ref={ref}
         className={clsx('relative flex-1', isTouchScreen || 'h-0')}
-        // `color-scheme: dark` will make iframe background white
         style={{ colorScheme: 'auto' }}
       >
         <div
           className={clsx(
             'absolute inset-0',
-            // do not cover `sash`
             'z-20',
             rendered && 'hidden',
             background,
@@ -410,15 +427,20 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
         <SelectionPopup tab={tab} />
         <Annotations tab={tab} />
       </div>
-      <ReaderPaneFooter tab={tab} />
+      <ReaderPaneFooter tab={tab} visible={chromeVisible} />
+      <ProgressBar percentage={percentage} />
     </div>
   )
 }
 
 interface ReaderPaneHeaderProps {
   tab: BookTab
+  visible: boolean
 }
-const ReaderPaneHeader: React.FC<ReaderPaneHeaderProps> = ({ tab }) => {
+const ReaderPaneHeader: React.FC<ReaderPaneHeaderProps> = ({
+  tab,
+  visible,
+}) => {
   const { location } = useSnapshot(tab)
   const navPath = tab.getNavPath()
 
@@ -427,62 +449,105 @@ const ReaderPaneHeader: React.FC<ReaderPaneHeaderProps> = ({ tab }) => {
   }, [navPath])
 
   return (
-    <Bar>
-      <div className="scroll-h flex">
-        {navPath.map((item, i) => (
+    <div
+      style={{
+        transition: 'opacity 0.3s',
+        opacity: visible ? 1 : 0,
+        pointerEvents: visible ? 'auto' : 'none',
+      }}
+    >
+      <Bar>
+        <div className="scroll-h flex items-center gap-1">
           <button
-            key={i}
-            className="hover:text-on-surface flex shrink-0 items-center"
+            className="text-outline hover:text-on-surface mr-1 flex-shrink-0"
+            onClick={() => reader.clear()}
+            title="Close book"
           >
-            {item.label}
-            {i !== navPath.length - 1 && <MdChevronRight size={20} />}
+            <MdClose size={16} />
           </button>
-        ))}
-      </div>
-      {location && (
-        <div className="shrink-0">
-          {location.start.displayed.page} / {location.start.displayed.total}
+          {navPath.map((item, i) => (
+            <button
+              key={i}
+              className="hover:text-on-surface flex shrink-0 items-center"
+            >
+              {item.label}
+              {i !== navPath.length - 1 && <MdChevronRight size={16} />}
+            </button>
+          ))}
         </div>
-      )}
-    </Bar>
+        {location && (
+          <div className="shrink-0">
+            {location.start.displayed.page} / {location.start.displayed.total}
+          </div>
+        )}
+      </Bar>
+    </div>
   )
 }
 
 interface FooterProps {
   tab: BookTab
+  visible: boolean
 }
-const ReaderPaneFooter: React.FC<FooterProps> = ({ tab }) => {
-  const { locationToReturn, location, book } = useSnapshot(tab)
+const ReaderPaneFooter: React.FC<FooterProps> = ({ tab, visible }) => {
+  const { locationToReturn, book } = useSnapshot(tab)
 
   const returnLabel = locationToReturn
     ? tab.mapSectionToNavItem(locationToReturn.end.href)?.label
     : undefined
 
+  if (locationToReturn) {
+    return (
+      <Bar>
+        <button
+          onClick={() => {
+            tab.hidePrevLocation()
+            tab.display(locationToReturn.end.cfi, false)
+          }}
+        >
+          Return to {returnLabel || 'previous location'}
+        </button>
+        <button onClick={() => tab.hidePrevLocation()}>Stay</button>
+      </Bar>
+    )
+  }
+
   return (
-    <Bar>
-      {locationToReturn ? (
-        <>
-          <button
-            className={clsx(locationToReturn || 'invisible')}
-            onClick={() => {
-              tab.hidePrevLocation()
-              tab.display(locationToReturn.end.cfi, false)
-            }}
-          >
-            Return to {returnLabel || 'previous location'}
-          </button>
-          <button
-            onClick={() => {
-              tab.hidePrevLocation()
-            }}
-          >
-            Stay
-          </button>
-        </>
-      ) : (
-        <div className="ml-auto">{((book.percentage ?? 0) * 100).toFixed()}%</div>
-      )}
-    </Bar>
+    <div
+      style={{
+        transition: 'opacity 0.3s',
+        opacity: visible ? 1 : 0,
+        pointerEvents: visible ? 'auto' : 'none',
+      }}
+    >
+      <Bar>
+        <div className="ml-auto">
+          {((book.percentage ?? 0) * 100).toFixed()}%
+        </div>
+      </Bar>
+    </div>
+  )
+}
+
+function ProgressBar({ percentage }: { percentage: number }) {
+  return (
+    <div
+      style={{
+        height: 2,
+        background: 'rgba(0,0,0,0.06)',
+        width: '100%',
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          height: '100%',
+          width: `${percentage}%`,
+          background: 'rgba(0,0,0,0.2)',
+          transition: 'width 0.3s ease',
+        }}
+      />
+    </div>
   )
 }
 

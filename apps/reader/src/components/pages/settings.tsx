@@ -21,12 +21,22 @@ export const Settings: React.FC = () => {
   return (
     <Page headline={t('title')}>
       <div className="space-y-6">
+        <Item title={t('color_scheme')}>
+          <Select
+            value={scheme}
+            onChange={(e) => setScheme(e.target.value as ColorScheme)}
+          >
+            <option value="system">{t('color_scheme.system')}</option>
+            <option value="light">{t('color_scheme.light')}</option>
+            <option value="dark">{t('color_scheme.dark')}</option>
+          </Select>
+        </Item>
+        <TranslateSettings />
+        <TtsSettings />
         <Item title={t('language')}>
           <Select
             value={locale}
-            onChange={(e) => {
-              push(asPath, undefined, { locale: e.target.value })
-            }}
+            onChange={(e) => push(asPath, undefined, { locale: e.target.value })}
           >
             {locales?.map((loc) => (
               <option key={loc} value={loc}>
@@ -35,19 +45,6 @@ export const Settings: React.FC = () => {
             ))}
           </Select>
         </Item>
-        <Item title={t('color_scheme')}>
-          <Select
-            value={scheme}
-            onChange={(e) => {
-              setScheme(e.target.value as ColorScheme)
-            }}
-          >
-            <option value="system">{t('color_scheme.system')}</option>
-            <option value="light">{t('color_scheme.light')}</option>
-            <option value="dark">{t('color_scheme.dark')}</option>
-          </Select>
-        </Item>
-        <TtsSettings />
         <Item title={t('cache')}>
           <Button
             variant="secondary"
@@ -67,115 +64,133 @@ export const Settings: React.FC = () => {
   )
 }
 
-const TtsSettings: React.FC = () => {
+const TranslateSettings: React.FC = () => {
   const [cfg, setCfg] = useTtsConfig()
-
   const update = (patch: Partial<TtsConfig>) => setCfg({ ...cfg, ...patch })
-  const updateShort = (patch: Partial<TtsConfig['shortApi']>) =>
-    update({ shortApi: { ...cfg.shortApi, ...patch } })
-  const updateLong = (patch: Partial<TtsConfig['longApi']>) =>
-    update({ longApi: { ...cfg.longApi, ...patch } })
 
   return (
     <>
-      <Item title="TTS & Translation">
+      <Item title="Translation">
         <div className="space-y-3">
           <Checkbox
-            name="Enable TTS"
-            checked={cfg.enabled}
-            onChange={(e) => update({ enabled: e.target.checked })}
-          />
-          <Checkbox
-            name="Enable translation popup"
+            name="Enable translation on text selection"
             checked={cfg.translateEnabled}
             onChange={(e) => update({ translateEnabled: e.target.checked })}
           />
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <Label>Voice</Label>
-              <Select
-                value={cfg.voice}
-                onChange={(e) => update({ voice: e.target.value })}
-              >
-                {['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].map(
-                  (v) => (
-                    <option key={v} value={v}>
-                      {v}
-                    </option>
-                  ),
-                )}
-              </Select>
-            </div>
-            <div className="flex-1">
-              <Label>Speed</Label>
-              <Select
-                value={String(cfg.speed)}
-                onChange={(e) => update({ speed: Number(e.target.value) })}
-              >
-                {['0.5', '0.75', '1.0', '1.25', '1.5', '2.0'].map((s) => (
-                  <option key={s} value={s}>
-                    {s}x
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex-1">
-              <Label>Threshold</Label>
-              <Select
-                value={String(cfg.threshold)}
-                onChange={(e) => update({ threshold: Number(e.target.value) })}
-              >
-                {['1', '2', '3', '5', '10'].map((n) => (
-                  <option key={n} value={n}>
-                    &le;{n} words
-                  </option>
-                ))}
-              </Select>
-            </div>
+          <div>
+            <Label>Method</Label>
+            <Select
+              value={cfg.translateMethod}
+              onChange={(e) =>
+                update({
+                  translateMethod: e.target.value as 'google' | 'llm',
+                })
+              }
+            >
+              <option value="google">Google Translate (free)</option>
+              <option value="llm">LLM (requires API key)</option>
+            </Select>
           </div>
-        </div>
-      </Item>
-      <Item title="Short sentence API">
-        <div className="space-y-2">
-          <TextField
-            name="URL"
-            defaultValue={cfg.shortApi.url}
-            onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-              updateShort({ url: e.target.value })
-            }
-            placeholder="https://api.example.com/v1/audio/speech"
-          />
-          <TextField
-            name="Key"
-            defaultValue={cfg.shortApi.key}
-            onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-              updateShort({ key: e.target.value })
-            }
-            placeholder="sk-..."
-          />
-        </div>
-      </Item>
-      <Item title="Long sentence API">
-        <div className="space-y-2">
-          <TextField
-            name="URL"
-            defaultValue={cfg.longApi.url}
-            onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-              updateLong({ url: e.target.value })
-            }
-            placeholder="https://api.example.com/v1/audio/speech"
-          />
-          <TextField
-            name="Key"
-            defaultValue={cfg.longApi.key}
-            onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-              updateLong({ key: e.target.value })
-            }
-            placeholder="sk-..."
-          />
+          {cfg.translateMethod === 'llm' && (
+            <div className="space-y-2">
+              <TextField
+                name="LLM API URL"
+                defaultValue={cfg.llmApi.url}
+                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+                  update({
+                    llmApi: { ...cfg.llmApi, url: e.target.value },
+                  })
+                }
+                placeholder="https://api.example.com/v1/chat/completions"
+              />
+              <TextField
+                name="LLM API Key"
+                defaultValue={cfg.llmApi.key}
+                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+                  update({
+                    llmApi: { ...cfg.llmApi, key: e.target.value },
+                  })
+                }
+                placeholder="sk-..."
+              />
+            </div>
+          )}
         </div>
       </Item>
     </>
+  )
+}
+
+const TtsSettings: React.FC = () => {
+  const [cfg, setCfg] = useTtsConfig()
+  const update = (patch: Partial<TtsConfig>) => setCfg({ ...cfg, ...patch })
+
+  return (
+    <Item title="TTS (Text-to-Speech)">
+      <div className="space-y-3">
+        <Checkbox
+          name="Enable auto-pronunciation on text selection"
+          checked={cfg.ttsEnabled}
+          onChange={(e) => update({ ttsEnabled: e.target.checked })}
+        />
+        {cfg.ttsEnabled && (
+          <>
+            <div className="space-y-2">
+              <TextField
+                name="TTS API URL"
+                defaultValue={cfg.ttsApi.url}
+                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+                  update({
+                    ttsApi: { ...cfg.ttsApi, url: e.target.value },
+                  })
+                }
+                placeholder="https://api.example.com/v1/audio/speech"
+              />
+              <TextField
+                name="TTS API Key"
+                defaultValue={cfg.ttsApi.key}
+                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+                  update({
+                    ttsApi: { ...cfg.ttsApi, key: e.target.value },
+                  })
+                }
+                placeholder="sk-..."
+              />
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <Label>Voice</Label>
+                <Select
+                  value={cfg.voice}
+                  onChange={(e) => update({ voice: e.target.value })}
+                >
+                  {['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].map(
+                    (v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ),
+                  )}
+                </Select>
+              </div>
+              <div className="flex-1">
+                <Label>Speed</Label>
+                <Select
+                  value={String(cfg.speed)}
+                  onChange={(e) => update({ speed: Number(e.target.value) })}
+                >
+                  {['0.5', '0.75', '1.0', '1.25', '1.5', '2.0'].map((s) => (
+                    <option key={s} value={s}>
+                      {s}x
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </Item>
   )
 }
 

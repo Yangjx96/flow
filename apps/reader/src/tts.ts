@@ -1,24 +1,5 @@
 import { TtsConfig } from './state'
 
-function getWordCount(text: string): number {
-  const t = text.trim().replace(/\s+/g, ' ')
-  if (!t) return 0
-  if (/[一-鿿぀-ヿ가-힯]/.test(t)) {
-    return t.replace(/[^一-鿿぀-ヿ가-힯]/g, '').length
-  }
-  return t.split(/\s+/).length
-}
-
-function chooseApi(config: TtsConfig, text: string) {
-  const count = getWordCount(text)
-  const api = count <= config.threshold ? config.shortApi : config.longApi
-  if (api.url && api.key) return api
-  // fallback to whichever is configured
-  if (config.shortApi.url && config.shortApi.key) return config.shortApi
-  if (config.longApi.url && config.longApi.key) return config.longApi
-  return null
-}
-
 let currentAudio: HTMLAudioElement | null = null
 
 export function stopAudio() {
@@ -26,7 +7,8 @@ export function stopAudio() {
     try {
       currentAudio.pause()
     } catch {}
-    if (currentAudio.src?.startsWith('blob:')) URL.revokeObjectURL(currentAudio.src)
+    if (currentAudio.src?.startsWith('blob:'))
+      URL.revokeObjectURL(currentAudio.src)
     currentAudio = null
   }
 }
@@ -35,8 +17,7 @@ export async function playTts(
   text: string,
   config: TtsConfig,
 ): Promise<void> {
-  const api = chooseApi(config, text)
-  if (!api) return
+  if (!config.ttsEnabled || !config.ttsApi.url || !config.ttsApi.key) return
 
   stopAudio()
 
@@ -46,9 +27,9 @@ export async function playTts(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text,
-        apiUrl: api.url,
-        apiKey: api.key,
-        model: config.model,
+        apiUrl: config.ttsApi.url,
+        apiKey: config.ttsApi.key,
+        model: 'tts-1',
         voice: config.voice,
         speed: config.speed,
       }),
@@ -71,16 +52,18 @@ export async function translateText(
   text: string,
   config: TtsConfig,
 ): Promise<string> {
-  const api = config.shortApi.url ? config.shortApi : config.longApi
-  if (!api.url || !api.key) return ''
-
-  const chatUrl = api.url.replace(/\/audio\/speech$/, '/chat/completions')
+  if (!config.translateEnabled) return ''
 
   try {
     const res = await fetch('/api/translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, apiUrl: chatUrl, apiKey: api.key }),
+      body: JSON.stringify({
+        text,
+        method: config.translateMethod,
+        apiUrl: config.llmApi.url,
+        apiKey: config.llmApi.key,
+      }),
     })
     if (!res.ok) return ''
     const data = await res.json()
