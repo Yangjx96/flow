@@ -3,14 +3,7 @@ import clsx from 'clsx'
 import { ComponentProps, useEffect, useState } from 'react'
 import { useMemo } from 'react'
 import { IconType } from 'react-icons'
-import {
-  MdFormatUnderlined,
-  MdOutlineImage,
-  MdSearch,
-  MdToc,
-  MdTimeline,
-  MdOutlineLightMode,
-} from 'react-icons/md'
+import { MdToc } from 'react-icons/md'
 import { RiFontSize, RiHome6Line, RiSettings5Line } from 'react-icons/ri'
 import { useRecoilState } from 'recoil'
 
@@ -30,11 +23,6 @@ import { activeClass } from '../styles'
 
 import { SplitView, useSplitViewItem } from './base'
 import { Settings } from './pages'
-import { AnnotationView } from './viewlets/AnnotationView'
-import { ImageView } from './viewlets/ImageView'
-import { SearchView } from './viewlets/SearchView'
-import { ThemeView } from './viewlets/ThemeView'
-import { TimelineView } from './viewlets/TimelineView'
 import { TocView } from './viewlets/TocView'
 import { TypographyView } from './viewlets/TypographyView'
 
@@ -47,7 +35,7 @@ export const Layout: React.FC = ({ children }) => {
 
   useEffect(() => {
     if (mobile === undefined) return
-    setAction(mobile ? undefined : 'toc')
+    setAction(undefined)
     setReady(true)
   }, [mobile, setAction])
 
@@ -83,45 +71,10 @@ const viewActions: IViewAction[] = [
     env: Env.Desktop | Env.Mobile,
   },
   {
-    name: 'search',
-    title: 'search',
-    Icon: MdSearch,
-    View: SearchView,
-    env: Env.Desktop | Env.Mobile,
-  },
-  {
-    name: 'annotation',
-    title: 'annotation',
-    Icon: MdFormatUnderlined,
-    View: AnnotationView,
-    env: Env.Desktop | Env.Mobile,
-  },
-  {
-    name: 'image',
-    title: 'image',
-    Icon: MdOutlineImage,
-    View: ImageView,
-    env: Env.Desktop,
-  },
-  {
-    name: 'timeline',
-    title: 'timeline',
-    Icon: MdTimeline,
-    View: TimelineView,
-    env: Env.Desktop,
-  },
-  {
     name: 'typography',
     title: 'typography',
     Icon: RiFontSize,
     View: TypographyView,
-    env: Env.Desktop | Env.Mobile,
-  },
-  {
-    name: 'theme',
-    title: 'theme',
-    Icon: MdOutlineLightMode,
-    View: ThemeView,
     env: Env.Desktop | Env.Mobile,
   },
 ]

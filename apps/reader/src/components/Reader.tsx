@@ -11,7 +11,6 @@ import { MdChevronRight, MdWebAsset } from 'react-icons/md'
 import { RiBookLine } from 'react-icons/ri'
 import { PhotoSlider } from 'react-photo-view'
 import { useSetRecoilState } from 'recoil'
-import useTilg from 'tilg'
 import { useSnapshot } from 'valtio'
 
 import { RenditionSpread } from '@flow/epubjs/types/rendition'
@@ -213,8 +212,6 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
 
   const { iframe, rendition, rendered, container } = useSnapshot(tab)
 
-  useTilg()
-
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -283,11 +280,21 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
 
   // `dragenter` not fired in iframe when the count of times is even, so use `dragover`
   useEventListener(iframe, 'dragover', (e: any) => {
-    console.log('drag enter in iframe')
     setDragEvent(e)
   })
 
   useEventListener(iframe, 'mousedown', onMouseDown)
+
+  // Forward epub iframe selection to parent for TTS userscript integration
+  useEventListener(iframe, 'mouseup', () => {
+    const sel = iframe?.getSelection()
+    const text = sel?.toString().trim()
+    if (text) {
+      document.dispatchEvent(
+        new CustomEvent('flow:text-selected', { detail: { text } }),
+      )
+    }
+  })
 
   useEventListener(iframe, 'click', (e) => {
     // https://developer.chrome.com/blog/tap-to-search
@@ -458,6 +465,10 @@ interface FooterProps {
 const ReaderPaneFooter: React.FC<FooterProps> = ({ tab }) => {
   const { locationToReturn, location, book } = useSnapshot(tab)
 
+  const returnLabel = locationToReturn
+    ? tab.mapSectionToNavItem(locationToReturn.end.href)?.label
+    : undefined
+
   return (
     <Bar>
       {locationToReturn ? (
@@ -469,7 +480,7 @@ const ReaderPaneFooter: React.FC<FooterProps> = ({ tab }) => {
               tab.display(locationToReturn.end.cfi, false)
             }}
           >
-            Return to {locationToReturn.end.cfi}
+            Return to {returnLabel || 'previous location'}
           </button>
           <button
             onClick={() => {
@@ -480,10 +491,7 @@ const ReaderPaneFooter: React.FC<FooterProps> = ({ tab }) => {
           </button>
         </>
       ) : (
-        <>
-          <div>{location?.start.href}</div>
-          <div>{((book.percentage ?? 0) * 100).toFixed()}%</div>
-        </>
+        <div className="ml-auto">{((book.percentage ?? 0) * 100).toFixed()}%</div>
       )}
     </Bar>
   )

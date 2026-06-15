@@ -46,7 +46,13 @@ interface ThemeConfiguration {
   background?: number
 }
 
-export const defaultSettings: Settings = {}
+export const defaultSettings: Settings = {
+  fontFamily: '"Times New Roman", Georgia, "Noto Serif", serif',
+  fontSize: '18px',
+  lineHeight: 1.6,
+  spread: RenditionSpread.None,
+  enableTextSelectionMenu: false,
+}
 
 const settingsState = atom<Settings>({
   key: 'settings',
