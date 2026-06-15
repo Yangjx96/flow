@@ -420,7 +420,7 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
           className={clsx(
             'absolute inset-0',
             'z-20',
-            rendered && 'hidden',
+            (rendered || iframe) && 'hidden',
             background,
           )}
         />

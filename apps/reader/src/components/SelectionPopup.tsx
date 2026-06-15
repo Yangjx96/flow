@@ -3,6 +3,7 @@ import { MdVolumeUp } from 'react-icons/md'
 import { useSnapshot } from 'valtio'
 
 import { BookTab } from '../models'
+import { useColorScheme } from '../hooks'
 import { useTtsConfig } from '../state'
 import { playTts, translateText, stopAudio } from '../tts'
 
@@ -18,6 +19,7 @@ interface SelectionPopupProps {
 
 export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const { iframe } = useSnapshot(tab)
+  const { dark } = useColorScheme()
   const [ttsConfig] = useTtsConfig()
   const [popup, setPopup] = useState<PopupState | null>(null)
   const [translation, setTranslation] = useState('')
@@ -118,9 +120,11 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
         top,
         width: w,
         maxWidth: 'calc(100vw - 16px)',
-        background: 'rgba(255,255,255,0.97)',
+        background: dark ? 'rgba(40,40,40,0.97)' : 'rgba(255,255,255,0.97)',
         borderRadius: 8,
-        boxShadow: '0 2px 16px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
+        boxShadow: dark
+          ? '0 2px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08)'
+          : '0 2px 16px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
         padding: '10px 14px',
         backdropFilter: 'blur(8px)',
       }}
@@ -130,7 +134,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
           style={{
             flex: 1,
             fontSize: 13,
-            color: '#666',
+            color: dark ? '#999' : '#666',
             lineHeight: 1.3,
             wordBreak: 'break-word',
           }}
@@ -146,7 +150,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
               border: 'none',
               cursor: 'pointer',
               padding: 2,
-              color: '#555',
+              color: dark ? '#aaa' : '#555',
               flexShrink: 0,
             }}
             onClick={(e) => {
@@ -164,12 +168,12 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
             marginTop: 6,
             fontSize: 14,
             lineHeight: 1.5,
-            color: '#222',
+            color: dark ? '#ddd' : '#222',
             whiteSpace: 'pre-wrap',
           }}
         >
           {loading ? (
-            <span style={{ color: '#999' }}>...</span>
+            <span style={{ color: dark ? '#666' : '#999' }}>...</span>
           ) : (
             translation
           )}
