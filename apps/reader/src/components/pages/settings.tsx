@@ -6,8 +6,8 @@ import {
   useColorScheme,
   useTranslation,
 } from '@flow/reader/hooks'
-import { localeNames } from '@flow/reader/locales'
-import { useSettings, useTtsConfig, TtsConfig } from '@flow/reader/state'
+import { localeNames } from '../../../locales'
+import { useTtsConfig, TtsConfig } from '@flow/reader/state'
 
 import { Button } from '../Button'
 import { Checkbox, Select, TextField } from '../Form'
@@ -16,7 +16,6 @@ import { Page } from '../Page'
 export const Settings: React.FC = () => {
   const { scheme, setScheme } = useColorScheme()
   const { asPath, push, locale, locales } = useRouter()
-  const [settings, setSettings] = useSettings()
   const t = useTranslation('settings')
 
   return (
