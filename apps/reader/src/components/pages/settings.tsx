@@ -9,7 +9,7 @@ import {
   useForceRender,
   useTranslation,
 } from '@flow/reader/hooks'
-import { localeNames } from '@flow/reader/locales'
+import { localeNames } from '../../../locales'
 import { useSettings } from '@flow/reader/state'
 import { dbx, mapToToken, OAUTH_SUCCESS_MESSAGE } from '@flow/reader/sync'
 
