@@ -136,13 +136,21 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   }, [popup])
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
+    const el = popupRef.current
+    if (el) {
+      const rect = el.getBoundingClientRect()
+      if (e.clientX > rect.right - 18 && e.clientY > rect.bottom - 18) return
+    }
     e.preventDefault()
-    e.stopPropagation()
     dragging.current = true
     const startX = e.clientX
     const startY = e.clientY
     const startLeft = latestPos.current.left
     const startTop = latestPos.current.top
+
+    const overlay = document.createElement('div')
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:49;cursor:move'
+    document.body.appendChild(overlay)
 
     const onMove = (ev: MouseEvent) => {
       ev.preventDefault()
@@ -154,9 +162,8 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     const onUp = (ev: MouseEvent) => {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
-      setTimeout(() => {
-        dragging.current = false
-      }, 0)
+      overlay.remove()
+      setTimeout(() => { dragging.current = false }, 0)
       const finalLeft = startLeft + (ev.clientX - startX)
       const finalTop = startTop + (ev.clientY - startY)
       const p = popupData.current
@@ -193,21 +200,17 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
           backdropFilter: 'blur(8px)',
           overflow: 'auto',
           resize: 'both',
+          cursor: 'move',
+          padding: '6px 8px',
         }}
+        onMouseDown={handleDragStart}
       >
         <div
-          style={{ padding: '6px 8px 0', cursor: 'move' }}
-          onMouseDown={handleDragStart}
-        />
-        <div
           style={{
-            padding: '2px 8px 6px',
             fontSize: 15,
             lineHeight: 1.5,
             color: dark ? '#ddd' : '#222',
             whiteSpace: 'pre-wrap',
-            cursor: 'text',
-            userSelect: 'text',
           }}
         >
           {loading ? (
@@ -217,7 +220,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
           )}
         </div>
         {showTts && (
-          <div style={{ textAlign: 'center', paddingBottom: 4 }}>
+          <div style={{ textAlign: 'center', marginTop: 2 }}>
             <button
               style={{
                 background: 'none',
@@ -226,6 +229,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
                 padding: 2,
                 color: dark ? '#aaa' : '#555',
               }}
+              onMouseDown={(e) => e.stopPropagation()}
               onClick={() => playTts(popup.text, ttsConfig)}
             >
               <MdVolumeUp size={14} />
