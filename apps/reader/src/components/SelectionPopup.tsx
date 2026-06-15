@@ -175,75 +175,64 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   if (!showTranslation) return null
 
   return (
-    <div
-      ref={popupRef}
-      className="fixed z-50"
-      style={{
-        left: pos.left,
-        top: pos.top,
-        minWidth: 160,
-        width: 320,
-        background: dark ? 'rgba(40,40,40,0.97)' : 'rgba(255,255,255,0.97)',
-        borderRadius: 10,
-        boxShadow: dark
-          ? '0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)'
-          : '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.05)',
-        backdropFilter: 'blur(8px)',
-        overflow: 'auto',
-        resize: 'both',
-      }}
-    >
+    <>
+      <style>{`.sp-box::-webkit-resizer{display:none}`}</style>
       <div
+        ref={popupRef}
+        className="sp-box fixed z-50"
         style={{
-          padding: '8px 14px 4px',
-          cursor: 'move',
-          display: 'flex',
-          justifyContent: 'center',
+          left: pos.left,
+          top: pos.top,
+          minWidth: 120,
+          width: 280,
+          background: dark ? 'rgba(40,40,40,0.97)' : 'rgba(255,255,255,0.97)',
+          borderRadius: 8,
+          boxShadow: dark
+            ? '0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)'
+            : '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.05)',
+          backdropFilter: 'blur(8px)',
+          overflow: 'auto',
+          resize: 'both',
         }}
-        onMouseDown={handleDragStart}
       >
         <div
-          style={{
-            width: 32,
-            height: 4,
-            borderRadius: 2,
-            background: dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.12)',
-          }}
+          style={{ padding: '6px 8px 0', cursor: 'move' }}
+          onMouseDown={handleDragStart}
         />
-      </div>
-      <div
-        style={{
-          padding: '0 14px 10px',
-          fontSize: 15,
-          lineHeight: 1.5,
-          color: dark ? '#ddd' : '#222',
-          whiteSpace: 'pre-wrap',
-          cursor: 'text',
-          userSelect: 'text',
-        }}
-      >
-        {loading ? (
-          <span style={{ color: dark ? '#666' : '#999' }}>...</span>
-        ) : (
-          translation
+        <div
+          style={{
+            padding: '2px 8px 6px',
+            fontSize: 15,
+            lineHeight: 1.5,
+            color: dark ? '#ddd' : '#222',
+            whiteSpace: 'pre-wrap',
+            cursor: 'text',
+            userSelect: 'text',
+          }}
+        >
+          {loading ? (
+            <span style={{ color: dark ? '#666' : '#999' }}>...</span>
+          ) : (
+            translation
+          )}
+        </div>
+        {showTts && (
+          <div style={{ textAlign: 'center', paddingBottom: 4 }}>
+            <button
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 2,
+                color: dark ? '#aaa' : '#555',
+              }}
+              onClick={() => playTts(popup.text, ttsConfig)}
+            >
+              <MdVolumeUp size={14} />
+            </button>
+          </div>
         )}
       </div>
-      {showTts && (
-        <div style={{ textAlign: 'center', padding: '0 14px 8px' }}>
-          <button
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 2,
-              color: dark ? '#aaa' : '#555',
-            }}
-            onClick={() => playTts(popup.text, ttsConfig)}
-          >
-            <MdVolumeUp size={14} />
-          </button>
-        </div>
-      )}
-    </div>
+    </>
   )
 }
