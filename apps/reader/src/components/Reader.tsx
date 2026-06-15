@@ -427,7 +427,8 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
         <SelectionPopup tab={tab} />
         <Annotations tab={tab} />
       </div>
-      <ReaderPaneFooter tab={tab} visible={chromeVisible} />
+      <ReaderPaneFooter tab={tab} />
+      <KindleProgress tab={tab} />
       <ProgressBar percentage={percentage} />
     </div>
   )
@@ -487,44 +488,53 @@ const ReaderPaneHeader: React.FC<ReaderPaneHeaderProps> = ({
 
 interface FooterProps {
   tab: BookTab
-  visible: boolean
 }
-const ReaderPaneFooter: React.FC<FooterProps> = ({ tab, visible }) => {
-  const { locationToReturn, book } = useSnapshot(tab)
+const ReaderPaneFooter: React.FC<FooterProps> = ({ tab }) => {
+  const { locationToReturn } = useSnapshot(tab)
 
-  const returnLabel = locationToReturn
-    ? tab.mapSectionToNavItem(locationToReturn.end.href)?.label
-    : undefined
+  if (!locationToReturn) return null
 
-  if (locationToReturn) {
-    return (
-      <Bar>
-        <button
-          onClick={() => {
-            tab.hidePrevLocation()
-            tab.display(locationToReturn.end.cfi, false)
-          }}
-        >
-          Return to {returnLabel || 'previous location'}
-        </button>
-        <button onClick={() => tab.hidePrevLocation()}>Stay</button>
-      </Bar>
-    )
-  }
+  const returnLabel = tab.mapSectionToNavItem(locationToReturn.end.href)?.label
+
+  return (
+    <Bar>
+      <button
+        onClick={() => {
+          tab.hidePrevLocation()
+          tab.display(locationToReturn.end.cfi, false)
+        }}
+      >
+        Return to {returnLabel || 'previous location'}
+      </button>
+      <button onClick={() => tab.hidePrevLocation()}>Stay</button>
+    </Bar>
+  )
+}
+
+function KindleProgress({ tab }: { tab: BookTab }) {
+  const { location, book } = useSnapshot(tab)
+  const percentage = ((book.percentage ?? 0) * 100).toFixed()
+
+  if (!location) return null
+
+  const page = location.start.displayed.page
+  const total = location.start.displayed.total
 
   return (
     <div
       style={{
-        transition: 'opacity 0.3s',
-        opacity: visible ? 1 : 0,
-        pointerEvents: visible ? 'auto' : 'none',
+        display: 'flex',
+        justifyContent: 'space-between',
+        padding: '4px 16px 2px',
+        fontSize: 11,
+        color: 'rgba(128,128,128,0.5)',
+        userSelect: 'none',
+        flexShrink: 0,
+        letterSpacing: '0.02em',
       }}
     >
-      <Bar>
-        <div className="ml-auto">
-          {((book.percentage ?? 0) * 100).toFixed()}%
-        </div>
-      </Bar>
+      <span>{page} / {total}</span>
+      <span>{percentage}%</span>
     </div>
   )
 }

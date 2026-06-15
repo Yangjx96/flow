@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MdVolumeUp } from 'react-icons/md'
 import { useSnapshot } from 'valtio'
 
@@ -6,12 +6,6 @@ import { BookTab } from '../models'
 import { useColorScheme } from '../hooks'
 import { useTtsConfig } from '../state'
 import { playTts, translateText, stopAudio } from '../tts'
-
-interface PopupState {
-  text: string
-  x: number
-  y: number
-}
 
 interface SelectionPopupProps {
   tab: BookTab
@@ -21,34 +15,27 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const { iframe } = useSnapshot(tab)
   const { dark } = useColorScheme()
   const [ttsConfig] = useTtsConfig()
-  const [popup, setPopup] = useState<PopupState | null>(null)
+  const [selectedText, setSelectedText] = useState<string | null>(null)
   const [translation, setTranslation] = useState('')
   const [loading, setLoading] = useState(false)
   const popupRef = useRef<HTMLDivElement>(null)
   const reqId = useRef(0)
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
 
   useEffect(() => {
     if (!iframe) return
 
-    const onMouseUp = (e: MouseEvent) => {
+    const onMouseUp = () => {
       const sel = iframe.getSelection()
       const text = sel?.toString().trim()
       if (!text) return
-
-      const iframeEl = (iframe as any).frameElement as HTMLIFrameElement
-      if (!iframeEl) return
-      const rect = iframeEl.getBoundingClientRect()
-
-      setPopup({ text, x: e.clientX + rect.left, y: e.clientY + rect.top })
-      setPos(null)
+      setSelectedText(text)
     }
 
     const onMouseDown = () => {
       setTimeout(() => {
         const sel = iframe.getSelection()
         if (!sel?.toString().trim()) {
-          setPopup(null)
+          setSelectedText(null)
           stopAudio()
         }
       }, 50)
@@ -63,96 +50,62 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   }, [iframe])
 
   useEffect(() => {
-    if (!popup?.text || !ttsConfig.ttsEnabled) return
-    playTts(popup.text, ttsConfig)
-  }, [popup?.text])
+    if (!selectedText || !ttsConfig.ttsEnabled) return
+    playTts(selectedText, ttsConfig)
+  }, [selectedText])
 
   useEffect(() => {
-    if (!popup?.text || !ttsConfig.translateEnabled) {
+    if (!selectedText || !ttsConfig.translateEnabled) {
       setTranslation('')
       return
     }
     const id = ++reqId.current
     setLoading(true)
     setTranslation('')
-    translateText(popup.text, ttsConfig).then((t) => {
+    translateText(selectedText, ttsConfig).then((t) => {
       if (id === reqId.current) {
         setTranslation(t)
         setLoading(false)
       }
     })
-  }, [popup?.text])
+  }, [selectedText])
 
   useEffect(() => {
-    if (!popup) return
+    if (!selectedText) return
     const onClick = (e: MouseEvent) => {
       if (popupRef.current?.contains(e.target as Node)) return
-      setPopup(null)
+      setSelectedText(null)
       stopAudio()
     }
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
-  }, [popup])
-
-  const handleDragStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    const el = popupRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const ox = e.clientX - rect.left
-    const oy = e.clientY - rect.top
-
-    const onMove = (ev: MouseEvent) => {
-      setPos({ left: ev.clientX - ox, top: ev.clientY - oy })
-    }
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }, [])
+  }, [selectedText])
 
   const showTranslation = ttsConfig.translateEnabled
   const showTts = ttsConfig.ttsEnabled && ttsConfig.ttsApi.url
   const active = showTranslation || showTts
-  if (!popup || !active) return null
-
-  // If only TTS, no popup needed (audio plays automatically)
+  if (!selectedText || !active) return null
   if (!showTranslation) return null
-
-  const w = 280
-  const margin = 8
-  let left = pos?.left ?? popup.x - w / 2
-  let top = pos?.top ?? popup.y - 50
-
-  if (!pos) {
-    if (left < margin) left = margin
-    if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin
-    if (top < margin) top = popup.y + 20 + margin
-  }
 
   return (
     <div
       ref={popupRef}
-      className="fixed z-50"
       style={{
-        left,
-        top,
-        width: w,
-        maxWidth: 'calc(100vw - 16px)',
+        position: 'absolute',
+        bottom: 24,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: 320,
+        maxWidth: 'calc(100% - 32px)',
         background: dark ? 'rgba(40,40,40,0.97)' : 'rgba(255,255,255,0.97)',
-        borderRadius: 8,
+        borderRadius: 10,
         boxShadow: dark
-          ? '0 2px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08)'
-          : '0 2px 16px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
-        padding: '8px 12px',
+          ? '0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)'
+          : '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.05)',
+        padding: '10px 14px',
         backdropFilter: 'blur(8px)',
-        cursor: 'move',
-        resize: 'horizontal',
-        overflow: 'hidden',
+        zIndex: 50,
       }}
-      onMouseDown={handleDragStart}
     >
       <div
         style={{
@@ -160,10 +113,8 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
           lineHeight: 1.5,
           color: dark ? '#ddd' : '#222',
           whiteSpace: 'pre-wrap',
-          cursor: 'text',
-          userSelect: 'text',
+          textAlign: 'center',
         }}
-        onMouseDown={(e) => e.stopPropagation()}
       >
         {loading ? (
           <span style={{ color: dark ? '#666' : '#999' }}>...</span>
@@ -172,19 +123,20 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
         )}
       </div>
       {showTts && (
-        <button
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '4px 0 0',
-            color: dark ? '#aaa' : '#555',
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={() => playTts(popup.text, ttsConfig)}
-        >
-          <MdVolumeUp size={14} />
-        </button>
+        <div style={{ textAlign: 'center', marginTop: 4 }}>
+          <button
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 2,
+              color: dark ? '#aaa' : '#555',
+            }}
+            onClick={() => playTts(selectedText, ttsConfig)}
+          >
+            <MdVolumeUp size={14} />
+          </button>
+        </div>
       )}
     </div>
   )
