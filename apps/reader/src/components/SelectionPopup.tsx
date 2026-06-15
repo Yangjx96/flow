@@ -17,6 +17,21 @@ interface SelectionPopupProps {
   tab: BookTab
 }
 
+function loadOffset(): { dx: number; dy: number } | null {
+  try {
+    const s = localStorage.getItem('popupOffset')
+    return s ? JSON.parse(s) : null
+  } catch {
+    return null
+  }
+}
+
+function saveOffset(o: { dx: number; dy: number }) {
+  try {
+    localStorage.setItem('popupOffset', JSON.stringify(o))
+  } catch {}
+}
+
 export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const { iframe } = useSnapshot(tab)
   const { dark } = useColorScheme()
@@ -24,8 +39,37 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const [popup, setPopup] = useState<PopupState | null>(null)
   const [translation, setTranslation] = useState('')
   const [loading, setLoading] = useState(false)
+  const [pos, setPos] = useState({ left: 0, top: 0 })
   const popupRef = useRef<HTMLDivElement>(null)
   const reqId = useRef(0)
+  const dragging = useRef(false)
+  const popupData = useRef<PopupState | null>(null)
+  const latestPos = useRef({ left: 0, top: 0 })
+  popupData.current = popup
+  latestPos.current = pos
+
+  useEffect(() => {
+    if (!popup) return
+    const offset = loadOffset()
+    const w = 320
+    const m = 8
+    let left: number, top: number
+
+    if (offset) {
+      left = popup.x + offset.dx
+      top = popup.y + offset.dy
+    } else {
+      left = popup.x - w / 2
+      top = popup.y - 50
+    }
+
+    if (left < m) left = m
+    if (left + w > window.innerWidth - m) left = window.innerWidth - w - m
+    if (top < m) top = popup.y + 20
+    if (top > window.innerHeight - 60) top = window.innerHeight - 60
+
+    setPos({ left, top })
+  }, [popup?.text, popup?.x, popup?.y])
 
   useEffect(() => {
     if (!iframe) return
@@ -82,6 +126,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   useEffect(() => {
     if (!popup) return
     const onClick = (e: MouseEvent) => {
+      if (dragging.current) return
       if (popupRef.current?.contains(e.target as Node)) return
       setPopup(null)
       stopAudio()
@@ -92,23 +137,32 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
-    const el = popupRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const ox = e.clientX - rect.left
-    const oy = e.clientY - rect.top
+    e.stopPropagation()
+    dragging.current = true
+    const startX = e.clientX
+    const startY = e.clientY
+    const startLeft = latestPos.current.left
+    const startTop = latestPos.current.top
 
     const onMove = (ev: MouseEvent) => {
-      el.style.left = `${ev.clientX - ox}px`
-      el.style.top = `${ev.clientY - oy}px`
+      ev.preventDefault()
+      setPos({
+        left: startLeft + (ev.clientX - startX),
+        top: startTop + (ev.clientY - startY),
+      })
     }
-    const onUp = () => {
+    const onUp = (ev: MouseEvent) => {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
-      const r = el.getBoundingClientRect()
-      try {
-        localStorage.setItem('popupPos', JSON.stringify({ left: r.left, top: r.top }))
-      } catch {}
+      setTimeout(() => {
+        dragging.current = false
+      }, 0)
+      const finalLeft = startLeft + (ev.clientX - startX)
+      const finalTop = startTop + (ev.clientY - startY)
+      const p = popupData.current
+      if (p) {
+        saveOffset({ dx: finalLeft - p.x, dy: finalTop - p.y })
+      }
     }
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
@@ -120,49 +174,46 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   if (!popup || !active) return null
   if (!showTranslation) return null
 
-  const w = 320
-  const margin = 8
-  let left: number, top: number
-
-  let saved: { left: number; top: number } | null = null
-  try {
-    const s = localStorage.getItem('popupPos')
-    if (s) saved = JSON.parse(s)
-  } catch {}
-
-  if (saved) {
-    left = Math.max(margin, Math.min(saved.left, window.innerWidth - w - margin))
-    top = Math.max(margin, Math.min(saved.top, window.innerHeight - 80))
-  } else {
-    left = popup.x - w / 2
-    top = popup.y - 50
-    if (left < margin) left = margin
-    if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin
-    if (top < margin) top = popup.y + 20
-  }
-
   return (
     <div
       ref={popupRef}
       className="fixed z-50"
       style={{
-        left,
-        top,
-        width: w,
-        maxWidth: 'calc(100vw - 16px)',
+        left: pos.left,
+        top: pos.top,
+        minWidth: 160,
+        width: 320,
         background: dark ? 'rgba(40,40,40,0.97)' : 'rgba(255,255,255,0.97)',
         borderRadius: 10,
         boxShadow: dark
           ? '0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)'
           : '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.05)',
-        padding: '10px 14px',
         backdropFilter: 'blur(8px)',
-        cursor: 'move',
+        overflow: 'auto',
+        resize: 'both',
       }}
-      onMouseDown={handleDragStart}
     >
       <div
         style={{
+          padding: '8px 14px 4px',
+          cursor: 'move',
+          display: 'flex',
+          justifyContent: 'center',
+        }}
+        onMouseDown={handleDragStart}
+      >
+        <div
+          style={{
+            width: 32,
+            height: 4,
+            borderRadius: 2,
+            background: dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.12)',
+          }}
+        />
+      </div>
+      <div
+        style={{
+          padding: '0 14px 10px',
           fontSize: 15,
           lineHeight: 1.5,
           color: dark ? '#ddd' : '#222',
@@ -170,7 +221,6 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
           cursor: 'text',
           userSelect: 'text',
         }}
-        onMouseDown={(e) => e.stopPropagation()}
       >
         {loading ? (
           <span style={{ color: dark ? '#666' : '#999' }}>...</span>
@@ -179,7 +229,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
         )}
       </div>
       {showTts && (
-        <div style={{ textAlign: 'center', marginTop: 4 }}>
+        <div style={{ textAlign: 'center', padding: '0 14px 8px' }}>
           <button
             style={{
               background: 'none',
@@ -188,7 +238,6 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
               padding: 2,
               color: dark ? '#aaa' : '#555',
             }}
-            onMouseDown={(e) => e.stopPropagation()}
             onClick={() => playTts(popup.text, ttsConfig)}
           >
             <MdVolumeUp size={14} />
