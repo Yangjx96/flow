@@ -409,7 +409,7 @@ const Book: React.FC<BookProps> = ({
         <img
           src={cover ?? placeholder}
           alt="Cover"
-          className="mx-auto aspect-[9/12] object-cover"
+          className="mx-auto aspect-[2/3] w-full object-contain"
           draggable={false}
         />
         {select && (
@@ -436,7 +436,7 @@ const Book: React.FC<BookProps> = ({
           )}
           size={16}
         />
-        {book.name}
+        {book.name.replace(/\.epub$/i, '')}
       </div>
     </div>
   )

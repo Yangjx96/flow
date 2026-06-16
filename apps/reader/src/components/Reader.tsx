@@ -513,12 +513,33 @@ const ReaderPaneFooter: React.FC<FooterProps> = ({ tab }) => {
 
 function KindleProgress({ tab }: { tab: BookTab }) {
   const { location, book } = useSnapshot(tab)
+  const [mode, setMode] = useState(0)
   const percentage = ((book.percentage ?? 0) * 100).toFixed()
 
   if (!location) return null
 
   const page = location.start.displayed.page
   const total = location.start.displayed.total
+
+  let origPage: number | undefined
+  let origTotal: number | undefined
+  try {
+    const pl = (tab.epub as any)?.pageList
+    if (pl && pl.locations?.length > 0) {
+      origPage = pl.pageFromCfi(location.start.cfi)
+      origTotal = pl.lastPage
+    }
+  } catch {}
+
+  const hasOrig = origPage != null && origPage > 0 && origTotal != null && origTotal > 0
+  const toggle = () => setMode((m) => (m + 1) % (hasOrig ? 2 : 1))
+
+  let leftText: string
+  if (mode === 1 && hasOrig) {
+    leftText = `p.${origPage} / ${origTotal}`
+  } else {
+    leftText = `${page} / ${total}`
+  }
 
   return (
     <div
@@ -531,9 +552,11 @@ function KindleProgress({ tab }: { tab: BookTab }) {
         userSelect: 'none',
         flexShrink: 0,
         letterSpacing: '0.02em',
+        cursor: hasOrig ? 'pointer' : 'default',
       }}
+      onClick={toggle}
     >
-      <span>{page} / {total}</span>
+      <span>{leftText}</span>
       <span>{percentage}%</span>
     </div>
   )

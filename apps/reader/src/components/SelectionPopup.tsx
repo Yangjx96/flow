@@ -32,6 +32,21 @@ function saveOffset(o: { dx: number; dy: number }) {
   } catch {}
 }
 
+function loadSize(): { w: number; h: number } | null {
+  try {
+    const s = localStorage.getItem('popupSize')
+    return s ? JSON.parse(s) : null
+  } catch {
+    return null
+  }
+}
+
+function saveSize(o: { w: number; h: number }) {
+  try {
+    localStorage.setItem('popupSize', JSON.stringify(o))
+  } catch {}
+}
+
 export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const { iframe } = useSnapshot(tab)
   const { dark } = useColorScheme()
@@ -40,6 +55,10 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const [translation, setTranslation] = useState('')
   const [loading, setLoading] = useState(false)
   const [pos, setPos] = useState({ left: 0, top: 0 })
+  const [size, setSize] = useState<{ w: number; h: number | null }>(() => {
+    const s = loadSize()
+    return s ? { w: s.w, h: s.h } : { w: 280, h: null }
+  })
   const popupRef = useRef<HTMLDivElement>(null)
   const reqId = useRef(0)
   const dragging = useRef(false)
@@ -51,7 +70,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   useEffect(() => {
     if (!popup) return
     const offset = loadOffset()
-    const w = 320
+    const w = size.w
     const m = 8
     let left: number, top: number
 
@@ -139,7 +158,19 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     const el = popupRef.current
     if (el) {
       const rect = el.getBoundingClientRect()
-      if (e.clientX > rect.right - 18 && e.clientY > rect.bottom - 18) return
+      if (e.clientX > rect.right - 18 && e.clientY > rect.bottom - 18) {
+        const onResizeUp = () => {
+          document.removeEventListener('mouseup', onResizeUp)
+          if (popupRef.current) {
+            const r = popupRef.current.getBoundingClientRect()
+            const ns = { w: Math.round(r.width), h: Math.round(r.height) }
+            setSize(ns)
+            saveSize(ns)
+          }
+        }
+        document.addEventListener('mouseup', onResizeUp)
+        return
+      }
     }
     e.preventDefault()
     dragging.current = true
@@ -191,7 +222,8 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
           left: pos.left,
           top: pos.top,
           minWidth: 120,
-          width: 280,
+          width: size.w,
+          ...(size.h ? { height: size.h } : {}),
           background: dark ? 'rgba(40,40,40,0.97)' : 'rgba(255,255,255,0.97)',
           borderRadius: 8,
           boxShadow: dark
