@@ -57,7 +57,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const [pos, setPos] = useState({ left: 0, top: 0 })
   const [size, setSize] = useState<{ w: number; h: number | null }>(() => {
     const s = loadSize()
-    return s ? { w: s.w, h: s.h } : { w: 280, h: null }
+    return s ? { w: s.w, h: s.h } : { w: 60, h: null }
   })
   const popupRef = useRef<HTMLDivElement>(null)
   const reqId = useRef(0)
@@ -70,7 +70,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   useEffect(() => {
     if (!popup) return
     const offset = loadOffset()
-    const w = size.w
+    const w = Math.max(size.w, 200)
     const m = 8
     let left: number, top: number
 
@@ -221,9 +221,10 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
         style={{
           left: pos.left,
           top: pos.top,
-          minWidth: 120,
-          width: size.w,
-          ...(size.h ? { height: size.h } : {}),
+          width: 'fit-content',
+          minWidth: size.w,
+          maxWidth: 500,
+          ...(size.h ? { minHeight: size.h } : {}),
           background: dark ? 'rgba(40,40,40,0.97)' : 'rgba(255,255,255,0.97)',
           borderRadius: 8,
           boxShadow: dark
