@@ -38,6 +38,7 @@ export interface RenditionOptions {
   snap?: boolean | object
   defaultDirection?: 'ltr'
   allowScriptedContent?: boolean
+  gap?: number
 }
 
 export interface DisplayedLocation {

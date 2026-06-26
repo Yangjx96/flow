@@ -30,7 +30,27 @@ export const navbarState = atom<boolean>({
 export interface Settings extends TypographyConfiguration {
   theme?: ThemeConfiguration
   enableTextSelectionMenu?: boolean
+  // key into `readingThemes`; controls the reading page background + text color
+  readingTheme?: string
 }
+
+export interface ReadingTheme {
+  key: string
+  bg: string // empty string = follow the light/dark color scheme
+  fg: string
+  dark: boolean
+}
+
+// muted, eye-friendly reading palettes (Kindle-style)
+export const readingThemes: ReadingTheme[] = [
+  { key: 'default', bg: '', fg: '', dark: false },
+  { key: 'paper', bg: '#faf8f2', fg: '#3a3733', dark: false },
+  { key: 'sepia', bg: '#f1e7d0', fg: '#5b4a32', dark: false },
+  { key: 'green', bg: '#d6e8d4', fg: '#2b3a2e', dark: false },
+  { key: 'gray', bg: '#d9dbdc', fg: '#2c2f31', dark: false },
+  { key: 'dark', bg: '#1b1d1f', fg: '#bcc2c5', dark: true },
+  { key: 'night', bg: '#000000', fg: '#7f8385', dark: true },
+]
 
 export type TextAlign = 'left' | 'justify'
 

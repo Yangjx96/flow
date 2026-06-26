@@ -14,7 +14,7 @@ import { useSetRecoilState } from 'recoil'
 import { useSnapshot } from 'valtio'
 
 import { RenditionSpread } from '@flow/epubjs/types/rendition'
-import { navbarState } from '@flow/reader/state'
+import { navbarState, readingThemes, useSettings } from '@flow/reader/state'
 
 import { db } from '../db'
 import { handleFiles } from '../file'
@@ -239,6 +239,9 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
   const typography = useTypography(tab)
   const { dark } = useColorScheme()
   const [background] = useBackground()
+  const [{ readingTheme }] = useSettings()
+  const rt =
+    readingThemes.find((t) => t.key === readingTheme) ?? readingThemes[0]!
 
   const { iframe, rendition, rendered, container, book } = useSnapshot(tab)
   const chromeVisible = useAutoHide(iframe)
@@ -316,8 +319,9 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
 
   useEffect(() => {
     if (dark === undefined) return
-    rendition?.themes.override('color', dark ? '#bfc8ca' : '#3f484a', dark)
-  }, [rendition, dark])
+    const fg = rt.bg ? rt.fg : dark ? '#bfc8ca' : '#3f484a'
+    rendition?.themes.override('color', fg, rt.bg ? true : dark)
+  }, [rendition, dark, rt])
 
   const [src, setSrc] = useState<string>()
 
@@ -431,7 +435,10 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
   const percentage = (book.percentage ?? 0) * 100
 
   return (
-    <div className={clsx('flex h-full flex-col', mobile && 'py-[3vw]')}>
+    <div
+      className={clsx('flex h-full flex-col', mobile && 'py-[3vw]')}
+      style={rt.bg ? { background: rt.bg } : undefined}
+    >
       <PhotoSlider
         images={[{ src, key: 0 }]}
         visible={!!src}
@@ -455,8 +462,9 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
             'absolute inset-0',
             'z-20',
             (rendered || iframe) && 'hidden',
-            background,
+            !rt.bg && background,
           )}
+          style={rt.bg ? { background: rt.bg } : undefined}
         />
         <SelectionPopup tab={tab} />
         <Annotations tab={tab} />

@@ -3,10 +3,11 @@ import { useCallback, useRef, useState } from 'react'
 import { MdAdd, MdRemove } from 'react-icons/md'
 
 import { RenditionSpread } from '@flow/epubjs/types/rendition'
-import { useTranslation } from '@flow/reader/hooks'
+import { useColorScheme, useTranslation } from '@flow/reader/hooks'
 import { reader, useReaderSnapshot } from '@flow/reader/models'
 import {
   defaultSettings,
+  readingThemes,
   TextAlign,
   TypographyConfiguration,
   useSettings,
@@ -23,11 +24,23 @@ enum TypographyScope {
   Global,
 }
 
+const fontPresets = [
+  { key: 'serif', family: '"Georgia", "Noto Serif", "Songti SC", serif' },
+  {
+    key: 'sans',
+    family:
+      '-apple-system, "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif',
+  },
+  { key: 'kai', family: '"Kaiti SC", "STKaiti", "Noto Serif CJK SC", serif' },
+]
+
 export const TypographyView: React.FC<PaneViewProps> = (props) => {
   const { focusedBookTab } = useReaderSnapshot()
   const [settings, setSettings] = useSettings()
   const [scope, setScope] = useState(TypographyScope.Book)
   const t = useTranslation('typography')
+  const { dark } = useColorScheme()
+  const activeTheme = settings.readingTheme ?? 'default'
 
   const [localFonts, setLocalFonts] = useState<string[]>()
 
@@ -110,6 +123,52 @@ export const TypographyView: React.FC<PaneViewProps> = (props) => {
         className="space-y-3 px-5 pt-2 pb-4"
         key={`${scope}${focusedBookTab?.id}`}
       >
+        <div>
+          <div className="typescale-label-medium text-on-surface-variant mb-1.5 block !text-[13px]">
+            {t('reading_theme')}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {readingThemes.map((rt) => {
+              const active = activeTheme === rt.key
+              const bg = rt.bg || (dark ? '#1c1c1e' : '#ffffff')
+              const fg = rt.fg || (dark ? '#bfc8ca' : '#3f484a')
+              return (
+                <button
+                  key={rt.key}
+                  title={t(`theme.${rt.key}`)}
+                  aria-label={t(`theme.${rt.key}`)}
+                  onClick={() =>
+                    setSettings((prev) => ({ ...prev, readingTheme: rt.key }))
+                  }
+                  className={clsx(
+                    'flex h-8 w-8 items-center justify-center rounded-full text-[13px] leading-none',
+                    active ? 'ring-primary ring-2' : 'ring-outline/20 ring-1',
+                  )}
+                  style={{ background: bg, color: fg }}
+                >
+                  A
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div>
+          <div className="typescale-label-medium text-on-surface-variant mb-1.5 block !text-[13px]">
+            {t('font_preset')}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {fontPresets.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setTypography('fontFamily', f.family)}
+                className="bg-default text-on-surface-variant rounded px-2.5 py-1 !text-[13px]"
+                style={{ fontFamily: f.family }}
+              >
+                {t(`font_preset.${f.key}`)}
+              </button>
+            ))}
+          </div>
+        </div>
         <Select
           name={t('page_view')}
           value={spread ?? RenditionSpread.Auto}
@@ -147,7 +206,7 @@ export const TypographyView: React.FC<PaneViewProps> = (props) => {
         <NumberField
           name={t('font_size')}
           min={14}
-          max={28}
+          max={36}
           defaultValue={fontSize && parseInt(fontSize)}
           onChange={(v) => {
             setTypography('fontSize', v ? v + 'px' : undefined)

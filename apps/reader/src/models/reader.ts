@@ -363,6 +363,11 @@ export class BookTab extends BaseTab {
         width: '100%',
         height: '100%',
         allowScriptedContent: true,
+        // epubjs pads the column gap into the view width, which over-counts
+        // pages (a phantom trailing page) and misaligns columns so the page
+        // number can stall on consecutive turns. The gap is invisible in
+        // single-page view anyway, so drop it for exact pagination.
+        gap: 0,
       }),
     )
     this.rendition.display(
