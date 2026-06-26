@@ -61,14 +61,19 @@ function isWordChar(ch: string | undefined) {
   return !!ch && /[A-Za-z0-9À-ɏ’']/.test(ch)
 }
 
-// grow a (possibly partial) range out to whole words on both ends
-function expandRangeToWords(range: Range): Range {
+// grow a (possibly partial) range out to whole words on both ends.
+// strict mode only completes an edge that actually lands inside a word, so a
+// selection ending on a space ("care of the ") is left alone instead of
+// swallowing the next word.
+function expandRangeToWords(range: Range, strict = false): Range {
   const r = range.cloneRange()
   const { startContainer, endContainer } = r
   if (startContainer.nodeType === 3) {
     const t = startContainer.textContent || ''
     let s = r.startOffset
-    while (s > 0 && isWordChar(t[s - 1])) s--
+    if (!strict || isWordChar(t[s])) {
+      while (s > 0 && isWordChar(t[s - 1])) s--
+    }
     try {
       r.setStart(startContainer, s)
     } catch {}
@@ -76,7 +81,9 @@ function expandRangeToWords(range: Range): Range {
   if (endContainer.nodeType === 3) {
     const t = endContainer.textContent || ''
     let e = r.endOffset
-    while (e < t.length && isWordChar(t[e])) e++
+    if (!strict || isWordChar(t[e - 1])) {
+      while (e < t.length && isWordChar(t[e])) e++
+    }
     try {
       r.setEnd(endContainer, e)
     } catch {}
@@ -162,6 +169,24 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     setPos({ left, top })
   }, [popup?.text, popup?.x, popup?.y])
 
+  // once the box has real dimensions (e.g. a long translation), pull it fully
+  // back into the viewport instead of letting it run off the bottom
+  useEffect(() => {
+    const el = popupRef.current
+    if (!popup || !el) return
+    const m = 8
+    const h = el.offsetHeight
+    const w = el.offsetWidth
+    setPos((p) => {
+      let { left, top } = p
+      if (top + h > window.innerHeight - m) top = window.innerHeight - m - h
+      if (left + w > window.innerWidth - m) left = window.innerWidth - w - m
+      if (top < m) top = m
+      if (left < m) left = m
+      return left === p.left && top === p.top ? p : { left, top }
+    })
+  }, [popup?.text, translation, loading])
+
   const clearSelection = useCallback(() => {
     try {
       iframeRef.current?.getSelection()?.removeAllRanges()
@@ -231,7 +256,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
         if (selectWordAtPoint(doc, sel, clientX, clientY))
           text = sel.toString().trim()
       } else if (text && (c.snapToWords ?? true) && sel.rangeCount) {
-        const w = expandRangeToWords(sel.getRangeAt(0))
+        const w = expandRangeToWords(sel.getRangeAt(0), true)
         const wt = w.toString().trim()
         if (wt && wt !== text) {
           try {
@@ -398,6 +423,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
           width: 'fit-content',
           minWidth: size.w,
           maxWidth: 500,
+          maxHeight: 'calc(100vh - 16px)',
           ...(size.h ? { minHeight: size.h } : {}),
           background: dark ? 'rgba(40,40,40,0.97)' : 'rgba(255,255,255,0.97)',
           borderRadius: 8,
