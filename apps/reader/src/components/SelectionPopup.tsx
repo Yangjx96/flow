@@ -54,6 +54,63 @@ function isTypingTarget() {
   return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable
 }
 
+// a "word" stays together across letters, digits, accents and apostrophes;
+// hyphens, dashes, brackets and other punctuation are treated as breaks so a
+// partial selection never reaches across them
+function isWordChar(ch: string | undefined) {
+  return !!ch && /[A-Za-z0-9À-ɏ’']/.test(ch)
+}
+
+// grow a (possibly partial) range out to whole words on both ends
+function expandRangeToWords(range: Range): Range {
+  const r = range.cloneRange()
+  const { startContainer, endContainer } = r
+  if (startContainer.nodeType === 3) {
+    const t = startContainer.textContent || ''
+    let s = r.startOffset
+    while (s > 0 && isWordChar(t[s - 1])) s--
+    try {
+      r.setStart(startContainer, s)
+    } catch {}
+  }
+  if (endContainer.nodeType === 3) {
+    const t = endContainer.textContent || ''
+    let e = r.endOffset
+    while (e < t.length && isWordChar(t[e])) e++
+    try {
+      r.setEnd(endContainer, e)
+    } catch {}
+  }
+  return r
+}
+
+// select the whole word under a point inside the reading iframe
+function selectWordAtPoint(
+  doc: Document,
+  sel: Selection,
+  x: number,
+  y: number,
+): boolean {
+  let caret: Range | null = null
+  const anyDoc = doc as any
+  if (anyDoc.caretRangeFromPoint) {
+    caret = anyDoc.caretRangeFromPoint(x, y)
+  } else if (anyDoc.caretPositionFromPoint) {
+    const p = anyDoc.caretPositionFromPoint(x, y)
+    if (p) {
+      caret = doc.createRange()
+      caret.setStart(p.offsetNode, p.offset)
+      caret.collapse(true)
+    }
+  }
+  if (!caret) return false
+  const word = expandRangeToWords(caret)
+  if (word.collapsed || !word.toString().trim()) return false
+  sel.removeAllRanges()
+  sel.addRange(word)
+  return true
+}
+
 export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const { iframe } = useSnapshot(tab)
   const { dark } = useColorScheme()
@@ -61,6 +118,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const [popup, setPopup] = useState<PopupState | null>(null)
   const [translation, setTranslation] = useState('')
   const [loading, setLoading] = useState(false)
+  const [fading, setFading] = useState(false)
   const [pos, setPos] = useState({ left: 0, top: 0 })
   const [size, setSize] = useState<{ w: number; h: number | null }>(() => {
     const s = loadSize()
@@ -74,7 +132,10 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   // the live selection, captured on mouseup but not shown until triggered
   const selection = useRef<PopupState | null>(null)
   const cfg = useRef(ttsConfig)
+  const iframeRef = useRef(iframe)
+  const fadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   cfg.current = ttsConfig
+  iframeRef.current = iframe
   popupData.current = popup
   latestPos.current = pos
 
@@ -101,8 +162,34 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     setPos({ left, top })
   }, [popup?.text, popup?.x, popup?.y])
 
+  const clearSelection = useCallback(() => {
+    try {
+      iframeRef.current?.getSelection()?.removeAllRanges()
+    } catch {}
+    selection.current = null
+  }, [])
+
+  // gently fade the box out, then drop it (and optionally the highlight)
+  const dismiss = useCallback(
+    (clearSel: boolean) => {
+      if (popupData.current) {
+        setFading(true)
+        if (fadeTimer.current) clearTimeout(fadeTimer.current)
+        fadeTimer.current = setTimeout(() => {
+          setPopup(null)
+          setFading(false)
+          if (clearSel) clearSelection()
+        }, 280)
+      } else if (clearSel) {
+        clearSelection()
+      }
+    },
+    [clearSelection],
+  )
+
   const translate = useCallback((sel: PopupState) => {
     if (!cfg.current.translateEnabled) return
+    setFading(false)
     setPopup(sel)
     const id = ++reqId.current
     setLoading(true)
@@ -115,32 +202,58 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     })
   }, [])
 
-  const speak = useCallback((sel: PopupState) => {
-    const c = cfg.current
-    if (!c.ttsEnabled) return
-    // skip long selections so reading a sentence doesn't fire pronunciation
-    const max = c.ttsMaxWords ?? 30
-    if (max > 0 && sel.text.trim().split(/\s+/).length > max) return
-    playTts(sel.text, c)
-  }, [])
+  const speak = useCallback(
+    (sel: PopupState) => {
+      const c = cfg.current
+      if (!c.ttsEnabled) return
+      // skip long selections so reading a sentence doesn't fire pronunciation
+      const max = c.ttsMaxWords ?? 30
+      if (max > 0 && sel.text.trim().split(/\s+/).length > max) return
+      playTts(sel.text, c, () => {
+        if (cfg.current.autoDismiss ?? true) dismiss(true)
+      })
+    },
+    [dismiss],
+  )
 
-  // capture selection; only auto-trigger when the user opted into it
+  // capture selection (drag / click / hover) and optionally auto-trigger
   useEffect(() => {
     if (!iframe) return
+    const doc = (iframe as any).document as Document
+    const iframeEl = (iframe as any).frameElement as HTMLIFrameElement
 
-    const onMouseUp = (e: MouseEvent) => {
+    const capture = (clientX: number, clientY: number, allowClick: boolean) => {
       const sel = iframe.getSelection()
-      const text = sel?.toString().trim()
-      if (!text) return
-      const iframeEl = (iframe as any).frameElement as HTMLIFrameElement
-      if (!iframeEl) return
+      if (!sel) return
+      let text = sel.toString().trim()
+      const c = cfg.current
+      if (!text && allowClick) {
+        if (selectWordAtPoint(doc, sel, clientX, clientY))
+          text = sel.toString().trim()
+      } else if (text && (c.snapToWords ?? true) && sel.rangeCount) {
+        const w = expandRangeToWords(sel.getRangeAt(0))
+        const wt = w.toString().trim()
+        if (wt && wt !== text) {
+          try {
+            sel.removeAllRanges()
+            sel.addRange(w)
+            text = wt
+          } catch {}
+        }
+      }
+      if (!text || !iframeEl) return
       const rect = iframeEl.getBoundingClientRect()
-      const data = { text, x: e.clientX + rect.left, y: e.clientY + rect.top }
+      const data = { text, x: clientX + rect.left, y: clientY + rect.top }
       selection.current = data
-      if (cfg.current.autoOnSelect) {
+      if (c.autoOnSelect) {
         translate(data)
         speak(data)
       }
+    }
+
+    const onMouseUp = (e: MouseEvent) => {
+      const onLink = !!(e.target as Element)?.closest?.('a')
+      capture(e.clientX, e.clientY, !!cfg.current.clickSelectsWord && !onLink)
     }
 
     const onMouseDown = () => {
@@ -154,11 +267,28 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
       }, 50)
     }
 
+    let hoverTimer: ReturnType<typeof setTimeout> | null = null
+    const onMouseMove = (e: MouseEvent) => {
+      if (!cfg.current.hoverSelectsWord) return
+      // never fight a real drag selection
+      if (e.buttons !== 0) return
+      if (hoverTimer) clearTimeout(hoverTimer)
+      hoverTimer = setTimeout(() => {
+        const sel = iframe.getSelection()
+        if (!sel) return
+        if (selectWordAtPoint(doc, sel, e.clientX, e.clientY))
+          capture(e.clientX, e.clientY, false)
+      }, 120)
+    }
+
     iframe.addEventListener('mouseup', onMouseUp)
     iframe.addEventListener('mousedown', onMouseDown)
+    iframe.addEventListener('mousemove', onMouseMove)
     return () => {
       iframe.removeEventListener('mouseup', onMouseUp)
       iframe.removeEventListener('mousedown', onMouseDown)
+      iframe.removeEventListener('mousemove', onMouseMove)
+      if (hoverTimer) clearTimeout(hoverTimer)
     }
   }, [iframe, translate, speak])
 
@@ -279,6 +409,9 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
           resize: 'both',
           cursor: 'move',
           padding: '6px 8px',
+          opacity: fading ? 0 : 1,
+          transition: 'opacity 0.28s ease',
+          pointerEvents: fading ? 'none' : 'auto',
         }}
         onMouseDown={handleDragStart}
       >

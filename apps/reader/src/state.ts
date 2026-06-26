@@ -87,6 +87,14 @@ export interface TtsConfig {
   speed: number
   // skip pronunciation when the selection is longer than this (0 = no limit)
   ttsMaxWords: number
+  // fade out the translation box and clear the selection when pronunciation ends
+  autoDismiss: boolean
+  // grow a partial selection out to whole words
+  snapToWords: boolean
+  // click a word to select it
+  clickSelectsWord: boolean
+  // hover a word to select it
+  hoverSelectsWord: boolean
 }
 
 export const defaultTtsConfig: TtsConfig = {
@@ -102,6 +110,10 @@ export const defaultTtsConfig: TtsConfig = {
   voice: 'alloy',
   speed: 1.0,
   ttsMaxWords: 30,
+  autoDismiss: true,
+  snapToWords: true,
+  clickSelectsWord: false,
+  hoverSelectsWord: false,
 }
 
 const ttsConfigState = atom<TtsConfig>({

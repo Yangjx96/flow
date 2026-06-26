@@ -261,6 +261,26 @@ const InteractionSettings: React.FC = () => {
           value={cfg.ttsShortcut}
           onChange={(k) => update({ ttsShortcut: k })}
         />
+        <Checkbox
+          name={t('snap_words')}
+          checked={cfg.snapToWords ?? true}
+          onChange={(e) => update({ snapToWords: e.target.checked })}
+        />
+        <Checkbox
+          name={t('auto_dismiss')}
+          checked={cfg.autoDismiss ?? true}
+          onChange={(e) => update({ autoDismiss: e.target.checked })}
+        />
+        <Checkbox
+          name={t('click_select')}
+          checked={cfg.clickSelectsWord ?? false}
+          onChange={(e) => update({ clickSelectsWord: e.target.checked })}
+        />
+        <Checkbox
+          name={t('hover_select')}
+          checked={cfg.hoverSelectsWord ?? false}
+          onChange={(e) => update({ hoverSelectsWord: e.target.checked })}
+        />
       </div>
     </Section>
   )

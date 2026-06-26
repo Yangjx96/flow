@@ -16,6 +16,7 @@ export function stopAudio() {
 export async function playTts(
   text: string,
   config: TtsConfig,
+  onEnded?: () => void,
 ): Promise<void> {
   // url/key may be supplied server-side via env, so only gate on the toggle
   if (!config.ttsEnabled) return
@@ -44,6 +45,7 @@ export async function playTts(
     audio.onended = () => {
       URL.revokeObjectURL(url)
       if (currentAudio === audio) currentAudio = null
+      onEnded?.()
     }
     await audio.play()
   } catch {}
