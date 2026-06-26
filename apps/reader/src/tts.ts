@@ -17,7 +17,8 @@ export async function playTts(
   text: string,
   config: TtsConfig,
 ): Promise<void> {
-  if (!config.ttsEnabled || !config.ttsApi.url || !config.ttsApi.key) return
+  // url/key may be supplied server-side via env, so only gate on the toggle
+  if (!config.ttsEnabled) return
 
   stopAudio()
 
@@ -29,7 +30,7 @@ export async function playTts(
         text,
         apiUrl: config.ttsApi.url,
         apiKey: config.ttsApi.key,
-        model: 'tts-1',
+        model: config.ttsModel || 'tts-1',
         voice: config.voice,
         speed: config.speed,
       }),

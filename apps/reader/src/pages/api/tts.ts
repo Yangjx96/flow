@@ -1,19 +1,24 @@
-import type { NextApiRequest, NextApiResponse } from 'next'
-import https from 'https'
 import http from 'http'
+import https from 'https'
+
+import type { NextApiRequest, NextApiResponse } from 'next'
 
 export const config = { api: { bodyParser: { sizeLimit: '1mb' } } }
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { text, apiUrl, apiKey, model, voice, speed } = req.body
+  const { text, voice, speed } = req.body
+  // fall back to server-side env so the key never has to live in the browser
+  const apiUrl = req.body.apiUrl || process.env.TTS_API_URL
+  const apiKey = req.body.apiKey || process.env.TTS_API_KEY
+  const model = req.body.model || process.env.TTS_MODEL || 'tts-1'
   if (!text || !apiUrl || !apiKey) return res.status(400).end()
 
   const url = new URL(apiUrl)
   const client = url.protocol === 'https:' ? https : http
   const payload = JSON.stringify({
-    model: model || 'tts-1',
+    model,
     input: text,
     voice: voice || 'alloy',
     speed: speed || 1.0,

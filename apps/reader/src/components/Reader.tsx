@@ -37,6 +37,7 @@ import {
   setClickedAnnotation,
   Annotations,
 } from './Annotation'
+import { ReaderMenu } from './ReaderMenu'
 import { SelectionPopup } from './SelectionPopup'
 import { Tab } from './Tab'
 import { DropZone, SplitView, useDndContext, useSplitViewItem } from './base'
@@ -414,7 +415,12 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
       <div
         ref={ref}
         className={clsx('relative flex-1', isTouchScreen || 'h-0')}
-        style={{ colorScheme: 'auto', maxWidth: 800, marginInline: 'auto', width: '100%' }}
+        style={{
+          colorScheme: 'auto',
+          maxWidth: typography.maxWidth ?? 800,
+          marginInline: 'auto',
+          width: '100%',
+        }}
       >
         <div
           className={clsx(
@@ -430,6 +436,7 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
       <ReaderPaneFooter tab={tab} />
       <KindleProgress tab={tab} />
       <ProgressBar percentage={percentage} />
+      <ReaderMenu visible={chromeVisible} />
     </div>
   )
 }

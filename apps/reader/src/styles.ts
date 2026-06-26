@@ -42,9 +42,11 @@ export function updateCustomStyle(
 ) {
   if (!contents || !settings) return
 
-  const { zoom, ...other } = settings
+  // strip non-CSS keys so they don't leak as invalid declarations
+  const { zoom, spread, maxWidth, theme, enableTextSelectionMenu, ...cssProps } =
+    settings
   let css = `a, article, cite, div, li, p, pre, span, table, body {
-    ${mapToCss(other)}
+    ${mapToCss(cssProps)}
   }`
 
   if (zoom) {

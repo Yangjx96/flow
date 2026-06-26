@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MdVolumeUp } from 'react-icons/md'
 import { useSnapshot } from 'valtio'
 
-import { BookTab } from '../models'
 import { useColorScheme } from '../hooks'
+import { BookTab } from '../models'
 import { useTtsConfig } from '../state'
 import { playTts, translateText, stopAudio } from '../tts'
 
@@ -47,6 +46,14 @@ function saveSize(o: { w: number; h: number }) {
   } catch {}
 }
 
+// don't hijack a keystroke while the user is typing in a field
+function isTypingTarget() {
+  const el = document.activeElement as HTMLElement | null
+  if (!el) return false
+  const tag = el.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable
+}
+
 export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const { iframe } = useSnapshot(tab)
   const { dark } = useColorScheme()
@@ -64,6 +71,10 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const dragging = useRef(false)
   const popupData = useRef<PopupState | null>(null)
   const latestPos = useRef({ left: 0, top: 0 })
+  // the live selection, captured on mouseup but not shown until triggered
+  const selection = useRef<PopupState | null>(null)
+  const cfg = useRef(ttsConfig)
+  cfg.current = ttsConfig
   popupData.current = popup
   latestPos.current = pos
 
@@ -90,6 +101,26 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     setPos({ left, top })
   }, [popup?.text, popup?.x, popup?.y])
 
+  const translate = useCallback((sel: PopupState) => {
+    if (!cfg.current.translateEnabled) return
+    setPopup(sel)
+    const id = ++reqId.current
+    setLoading(true)
+    setTranslation('')
+    translateText(sel.text, cfg.current).then((t) => {
+      if (id === reqId.current) {
+        setTranslation(t)
+        setLoading(false)
+      }
+    })
+  }, [])
+
+  const speak = useCallback((sel: PopupState) => {
+    if (!cfg.current.ttsEnabled) return
+    playTts(sel.text, cfg.current)
+  }, [])
+
+  // capture selection; only auto-trigger when the user opted into it
   useEffect(() => {
     if (!iframe) return
 
@@ -100,13 +131,19 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
       const iframeEl = (iframe as any).frameElement as HTMLIFrameElement
       if (!iframeEl) return
       const rect = iframeEl.getBoundingClientRect()
-      setPopup({ text, x: e.clientX + rect.left, y: e.clientY + rect.top })
+      const data = { text, x: e.clientX + rect.left, y: e.clientY + rect.top }
+      selection.current = data
+      if (cfg.current.autoOnSelect) {
+        translate(data)
+        speak(data)
+      }
     }
 
     const onMouseDown = () => {
       setTimeout(() => {
         const sel = iframe.getSelection()
         if (!sel?.toString().trim()) {
+          selection.current = null
           setPopup(null)
           stopAudio()
         }
@@ -119,28 +156,33 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
       iframe.removeEventListener('mouseup', onMouseUp)
       iframe.removeEventListener('mousedown', onMouseDown)
     }
-  }, [iframe])
+  }, [iframe, translate, speak])
 
+  // keyboard shortcuts: translate / pronounce the current selection
   useEffect(() => {
-    if (!popup?.text || !ttsConfig.ttsEnabled) return
-    playTts(popup.text, ttsConfig)
-  }, [popup?.text])
-
-  useEffect(() => {
-    if (!popup?.text || !ttsConfig.translateEnabled) {
-      setTranslation('')
-      return
-    }
-    const id = ++reqId.current
-    setLoading(true)
-    setTranslation('')
-    translateText(popup.text, ttsConfig).then((t) => {
-      if (id === reqId.current) {
-        setTranslation(t)
-        setLoading(false)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (isTypingTarget()) return
+      const sel = selection.current
+      if (!sel) return
+      const key = e.key.toLowerCase()
+      const c = cfg.current
+      if (c.translateEnabled && key === c.translateShortcut) {
+        e.preventDefault()
+        translate(sel)
+      } else if (c.ttsEnabled && key === c.ttsShortcut) {
+        e.preventDefault()
+        speak(sel)
       }
-    })
-  }, [popup?.text])
+    }
+
+    document.addEventListener('keydown', onKey)
+    iframe?.addEventListener('keydown', onKey as any)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      iframe?.removeEventListener('keydown', onKey as any)
+    }
+  }, [iframe, translate, speak])
 
   useEffect(() => {
     if (!popup) return
@@ -194,7 +236,9 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
       overlay.remove()
-      setTimeout(() => { dragging.current = false }, 0)
+      setTimeout(() => {
+        dragging.current = false
+      }, 0)
       const finalLeft = startLeft + (ev.clientX - startX)
       const finalTop = startTop + (ev.clientY - startY)
       const p = popupData.current
@@ -206,11 +250,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     document.addEventListener('mouseup', onUp)
   }, [])
 
-  const showTranslation = ttsConfig.translateEnabled
-  const showTts = ttsConfig.ttsEnabled && ttsConfig.ttsApi.url
-  const active = showTranslation || showTts
-  if (!popup || !active) return null
-  if (!showTranslation) return null
+  if (!popup) return null
 
   return (
     <>
@@ -252,23 +292,6 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
             translation
           )}
         </div>
-        {showTts && (
-          <div style={{ textAlign: 'center', marginTop: 2 }}>
-            <button
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: 2,
-                color: dark ? '#aaa' : '#555',
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={() => playTts(popup.text, ttsConfig)}
-            >
-              <MdVolumeUp size={14} />
-            </button>
-          </div>
-        )}
       </div>
     </>
   )

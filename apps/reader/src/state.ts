@@ -32,6 +32,8 @@ export interface Settings extends TypographyConfiguration {
   enableTextSelectionMenu?: boolean
 }
 
+export type TextAlign = 'left' | 'justify'
+
 export interface TypographyConfiguration {
   fontSize?: string
   fontWeight?: number
@@ -39,6 +41,9 @@ export interface TypographyConfiguration {
   lineHeight?: number
   spread?: RenditionSpread
   zoom?: number
+  textAlign?: TextAlign
+  letterSpacing?: string
+  maxWidth?: number
 }
 
 interface ThemeConfiguration {
@@ -51,6 +56,8 @@ export const defaultSettings: Settings = {
   fontSize: '20px',
   lineHeight: 1.8,
   spread: RenditionSpread.None,
+  textAlign: 'justify',
+  maxWidth: 800,
   enableTextSelectionMenu: false,
 }
 
@@ -67,27 +74,37 @@ export function useSettings() {
 export interface TtsConfig {
   ttsEnabled: boolean
   translateEnabled: boolean
+  // when true, fire automatically on text selection; otherwise wait for a shortcut
+  autoOnSelect: boolean
+  // single lowercase key that triggers translate / pronounce on the current selection
+  translateShortcut: string
+  ttsShortcut: string
   translateMethod: 'google' | 'llm'
   llmApi: { url: string; key: string }
   ttsApi: { url: string; key: string }
+  ttsModel: string
   voice: string
   speed: number
 }
 
 export const defaultTtsConfig: TtsConfig = {
-  ttsEnabled: false,
+  ttsEnabled: true,
   translateEnabled: true,
-  translateMethod: 'google',
+  autoOnSelect: false,
+  translateShortcut: 'd',
+  ttsShortcut: 's',
+  translateMethod: 'llm',
   llmApi: { url: '', key: '' },
   ttsApi: { url: '', key: '' },
+  ttsModel: 'tts-1',
   voice: 'alloy',
   speed: 1.0,
 }
 
 const ttsConfigState = atom<TtsConfig>({
-  key: 'ttsConfig2',
+  key: 'ttsConfig3',
   default: defaultTtsConfig,
-  effects: [localStorageEffect('ttsConfig2', defaultTtsConfig)],
+  effects: [localStorageEffect('ttsConfig3', defaultTtsConfig)],
 })
 
 export function useTtsConfig() {

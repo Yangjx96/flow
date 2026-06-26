@@ -1,14 +1,15 @@
 import Dexie from 'dexie'
 import { useRouter } from 'next/router'
+import { useEffect, useState } from 'react'
 
 import {
   ColorScheme,
   useColorScheme,
   useTranslation,
 } from '@flow/reader/hooks'
-import { localeNames } from '../../../locales'
 import { useTtsConfig, TtsConfig } from '@flow/reader/state'
 
+import { localeNames } from '../../../locales'
 import { Button } from '../Button'
 import { Checkbox, Select, TextField } from '../Form'
 import { Page } from '../Page'
@@ -21,19 +22,24 @@ export const Settings: React.FC = () => {
   return (
     <Page headline={t('title')}>
       <div className="space-y-6">
-        <Item title={t('color_scheme')}>
-          <Select
-            value={scheme}
-            onChange={(e) => setScheme(e.target.value as ColorScheme)}
-          >
-            <option value="system">{t('color_scheme.system')}</option>
-            <option value="light">{t('color_scheme.light')}</option>
-            <option value="dark">{t('color_scheme.dark')}</option>
-          </Select>
-        </Item>
+        <Section title={t('appearance')}>
+          <Field name={t('color_scheme')}>
+            <Select
+              value={scheme}
+              onChange={(e) => setScheme(e.target.value as ColorScheme)}
+            >
+              <option value="system">{t('color_scheme.system')}</option>
+              <option value="light">{t('color_scheme.light')}</option>
+              <option value="dark">{t('color_scheme.dark')}</option>
+            </Select>
+          </Field>
+        </Section>
+
         <TranslateSettings />
         <TtsSettings />
-        <Item title={t('language')}>
+        <InteractionSettings />
+
+        <Section title={t('language')}>
           <Select
             value={locale}
             onChange={(e) => push(asPath, undefined, { locale: e.target.value })}
@@ -44,8 +50,9 @@ export const Settings: React.FC = () => {
               </option>
             ))}
           </Select>
-        </Item>
-        <Item title={t('cache')}>
+        </Section>
+
+        <Section title={t('data')}>
           <Button
             variant="secondary"
             onClick={() => {
@@ -58,7 +65,7 @@ export const Settings: React.FC = () => {
           >
             {t('cache.clear')}
           </Button>
-        </Item>
+        </Section>
       </div>
     </Page>
   )
@@ -66,100 +73,84 @@ export const Settings: React.FC = () => {
 
 const TranslateSettings: React.FC = () => {
   const [cfg, setCfg] = useTtsConfig()
+  const t = useTranslation('settings')
+  const [advanced, setAdvanced] = useState(false)
   const update = (patch: Partial<TtsConfig>) => setCfg({ ...cfg, ...patch })
 
   return (
-    <>
-      <Item title="Translation">
-        <div className="space-y-3">
-          <Checkbox
-            name="Enable translation on text selection"
-            checked={cfg.translateEnabled}
-            onChange={(e) => update({ translateEnabled: e.target.checked })}
-          />
-          <div>
-            <Label>Method</Label>
-            <Select
-              value={cfg.translateMethod}
-              onChange={(e) =>
-                update({
-                  translateMethod: e.target.value as 'google' | 'llm',
-                })
-              }
-            >
-              <option value="google">Google Translate (free)</option>
-              <option value="llm">LLM (requires API key)</option>
-            </Select>
-          </div>
-          {cfg.translateMethod === 'llm' && (
-            <div className="space-y-2">
-              <TextField
-                name="LLM API URL"
-                defaultValue={cfg.llmApi.url}
-                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-                  update({
-                    llmApi: { ...cfg.llmApi, url: e.target.value },
-                  })
+    <Section title={t('translation')}>
+      <div className="space-y-3">
+        <Checkbox
+          name={t('translation.enable')}
+          checked={cfg.translateEnabled}
+          onChange={(e) => update({ translateEnabled: e.target.checked })}
+        />
+        {cfg.translateEnabled && (
+          <>
+            <Field name={t('translation.method')}>
+              <Select
+                value={cfg.translateMethod}
+                onChange={(e) =>
+                  update({ translateMethod: e.target.value as 'google' | 'llm' })
                 }
-                placeholder="https://api.example.com/v1/chat/completions"
-              />
-              <TextField
-                name="LLM API Key"
-                defaultValue={cfg.llmApi.key}
-                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-                  update({
-                    llmApi: { ...cfg.llmApi, key: e.target.value },
-                  })
-                }
-                placeholder="sk-..."
-              />
-            </div>
-          )}
-        </div>
-      </Item>
-    </>
+              >
+                <option value="google">{t('translation.google')}</option>
+                <option value="llm">{t('translation.llm')}</option>
+              </Select>
+            </Field>
+            {cfg.translateMethod === 'llm' && (
+              <Advanced
+                open={advanced}
+                onToggle={() => setAdvanced((v) => !v)}
+                label={t('advanced')}
+              >
+                <p className="text-outline mb-2 text-[12px]">
+                  {t('api_note')}
+                </p>
+                <TextField
+                  name={t('api_url')}
+                  defaultValue={cfg.llmApi.url}
+                  onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+                    update({ llmApi: { ...cfg.llmApi, url: e.target.value } })
+                  }
+                  placeholder="https://api.example.com/v1/chat/completions"
+                />
+                <TextField
+                  name={t('api_key')}
+                  type="password"
+                  defaultValue={cfg.llmApi.key}
+                  onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+                    update({ llmApi: { ...cfg.llmApi, key: e.target.value } })
+                  }
+                  placeholder="sk-..."
+                />
+              </Advanced>
+            )}
+          </>
+        )}
+      </div>
+    </Section>
   )
 }
 
 const TtsSettings: React.FC = () => {
   const [cfg, setCfg] = useTtsConfig()
+  const t = useTranslation('settings')
+  const [advanced, setAdvanced] = useState(false)
   const update = (patch: Partial<TtsConfig>) => setCfg({ ...cfg, ...patch })
 
   return (
-    <Item title="TTS (Text-to-Speech)">
+    <Section title={t('tts')}>
       <div className="space-y-3">
         <Checkbox
-          name="Enable auto-pronunciation on text selection"
+          name={t('tts.enable')}
           checked={cfg.ttsEnabled}
           onChange={(e) => update({ ttsEnabled: e.target.checked })}
         />
         {cfg.ttsEnabled && (
           <>
-            <div className="space-y-2">
-              <TextField
-                name="TTS API URL"
-                defaultValue={cfg.ttsApi.url}
-                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-                  update({
-                    ttsApi: { ...cfg.ttsApi, url: e.target.value },
-                  })
-                }
-                placeholder="https://api.example.com/v1/audio/speech"
-              />
-              <TextField
-                name="TTS API Key"
-                defaultValue={cfg.ttsApi.key}
-                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-                  update({
-                    ttsApi: { ...cfg.ttsApi, key: e.target.value },
-                  })
-                }
-                placeholder="sk-..."
-              />
-            </div>
             <div className="flex gap-3">
-              <div className="flex-1">
-                <Label>Voice</Label>
+              <Field name={t('tts.voice')} className="flex-1">
                 <Select
                   value={cfg.voice}
                   onChange={(e) => update({ voice: e.target.value })}
@@ -172,44 +163,184 @@ const TtsSettings: React.FC = () => {
                     ),
                   )}
                 </Select>
-              </div>
-              <div className="flex-1">
-                <Label>Speed</Label>
+              </Field>
+              <Field name={t('tts.speed')} className="flex-1">
                 <Select
                   value={String(cfg.speed)}
                   onChange={(e) => update({ speed: Number(e.target.value) })}
                 >
-                  {['0.5', '0.75', '1.0', '1.25', '1.5', '2.0'].map((s) => (
-                    <option key={s} value={s}>
+                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map((s) => (
+                    <option key={s} value={String(s)}>
                       {s}x
                     </option>
                   ))}
                 </Select>
-              </div>
+              </Field>
             </div>
+            <Field name={t('tts.model')}>
+              <Select
+                value={cfg.ttsModel}
+                onChange={(e) => update({ ttsModel: e.target.value })}
+              >
+                {['tts-1', 'tts-1-hd', 'gpt-4o-mini-tts'].map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Advanced
+              open={advanced}
+              onToggle={() => setAdvanced((v) => !v)}
+              label={t('advanced')}
+            >
+              <p className="text-outline mb-2 text-[12px]">{t('api_note')}</p>
+              <TextField
+                name={t('api_url')}
+                defaultValue={cfg.ttsApi.url}
+                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+                  update({ ttsApi: { ...cfg.ttsApi, url: e.target.value } })
+                }
+                placeholder="https://api.example.com/v1/audio/speech"
+              />
+              <TextField
+                name={t('api_key')}
+                type="password"
+                defaultValue={cfg.ttsApi.key}
+                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+                  update({ ttsApi: { ...cfg.ttsApi, key: e.target.value } })
+                }
+                placeholder="sk-..."
+              />
+            </Advanced>
           </>
         )}
       </div>
-    </Item>
+    </Section>
   )
 }
 
-const Label: React.FC = ({ children }) => (
-  <div className="typescale-label-small text-on-surface-variant mb-1">
+const InteractionSettings: React.FC = () => {
+  const [cfg, setCfg] = useTtsConfig()
+  const t = useTranslation('settings')
+  const update = (patch: Partial<TtsConfig>) => setCfg({ ...cfg, ...patch })
+
+  return (
+    <Section title={t('interaction')}>
+      <div className="space-y-3">
+        <Field name={t('trigger')}>
+          <Select
+            value={cfg.autoOnSelect ? 'select' : 'shortcut'}
+            onChange={(e) => update({ autoOnSelect: e.target.value === 'select' })}
+          >
+            <option value="shortcut">{t('trigger.shortcut')}</option>
+            <option value="select">{t('trigger.select')}</option>
+          </Select>
+        </Field>
+        <ShortcutField
+          label={t('shortcut.translate')}
+          value={cfg.translateShortcut}
+          onChange={(k) => update({ translateShortcut: k })}
+        />
+        <ShortcutField
+          label={t('shortcut.tts')}
+          value={cfg.ttsShortcut}
+          onChange={(k) => update({ ttsShortcut: k })}
+        />
+      </div>
+    </Section>
+  )
+}
+
+interface ShortcutFieldProps {
+  label: string
+  value: string
+  onChange: (key: string) => void
+}
+const ShortcutField: React.FC<ShortcutFieldProps> = ({
+  label,
+  value,
+  onChange,
+}) => {
+  const [capturing, setCapturing] = useState(false)
+  const t = useTranslation('settings')
+
+  useEffect(() => {
+    if (!capturing) return
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault()
+      if (e.key === 'Escape') {
+        setCapturing(false)
+        return
+      }
+      if (e.key.length === 1) {
+        onChange(e.key.toLowerCase())
+        setCapturing(false)
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [capturing, onChange])
+
+  return (
+    <div className="flex items-center">
+      <span className="typescale-label-medium text-on-surface-variant !text-[13px]">
+        {label}
+      </span>
+      <button
+        className="bg-default text-on-surface-variant ml-auto min-w-[3.5rem] rounded px-2 py-1 text-center !text-[13px] uppercase"
+        onClick={() => setCapturing(true)}
+      >
+        {capturing ? t('shortcut.press') : value.toUpperCase()}
+      </button>
+    </div>
+  )
+}
+
+interface AdvancedProps {
+  open: boolean
+  onToggle: () => void
+  label: string
+}
+const Advanced: React.FC<AdvancedProps> = ({
+  open,
+  onToggle,
+  label,
+  children,
+}) => (
+  <div>
+    <button
+      className="text-outline hover:text-on-surface-variant !text-[12px]"
+      onClick={onToggle}
+    >
+      {open ? '▾ ' : '▸ '}
+      {label}
+    </button>
+    {open && <div className="mt-2 space-y-2">{children}</div>}
+  </div>
+)
+
+interface FieldProps {
+  name: string
+  className?: string
+}
+const Field: React.FC<FieldProps> = ({ name, className, children }) => (
+  <div className={className}>
+    <div className="typescale-label-small text-on-surface-variant mb-1">
+      {name}
+    </div>
     {children}
   </div>
 )
 
-interface PartProps {
+interface SectionProps {
   title: string
 }
-const Item: React.FC<PartProps> = ({ title, children }) => {
-  return (
-    <div>
-      <h3 className="typescale-title-small text-on-surface-variant">{title}</h3>
-      <div className="mt-2">{children}</div>
-    </div>
-  )
-}
+const Section: React.FC<SectionProps> = ({ title, children }) => (
+  <div>
+    <h3 className="typescale-title-small text-on-surface-variant">{title}</h3>
+    <div className="mt-2">{children}</div>
+  </div>
+)
 
 Settings.displayName = 'settings'

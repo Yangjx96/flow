@@ -1,6 +1,7 @@
-import type { NextApiRequest, NextApiResponse } from 'next'
-import https from 'https'
 import http from 'http'
+import https from 'https'
+
+import type { NextApiRequest, NextApiResponse } from 'next'
 
 export default async function handler(
   req: NextApiRequest,
@@ -8,8 +9,12 @@ export default async function handler(
 ) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { text, method, apiUrl, apiKey } = req.body
+  const { text, method } = req.body
   if (!text) return res.status(400).end()
+
+  // fall back to server-side env so the key never has to live in the browser
+  const apiUrl = req.body.apiUrl || process.env.LLM_API_URL
+  const apiKey = req.body.apiKey || process.env.LLM_API_KEY
 
   if (method === 'llm' && apiUrl && apiKey) {
     return llmTranslate(text, apiUrl, apiKey, res)
@@ -61,7 +66,7 @@ function llmTranslate(
   const url = new URL(apiUrl)
   const client = url.protocol === 'https:' ? https : http
   const payload = JSON.stringify({
-    model: 'gpt-4o-mini',
+    model: process.env.LLM_MODEL || 'gpt-4o-mini',
     messages: [
       {
         role: 'system',

@@ -7,6 +7,7 @@ import { useTranslation } from '@flow/reader/hooks'
 import { reader, useReaderSnapshot } from '@flow/reader/models'
 import {
   defaultSettings,
+  TextAlign,
   TypographyConfiguration,
   useSettings,
 } from '@flow/reader/state'
@@ -30,7 +31,16 @@ export const TypographyView: React.FC<PaneViewProps> = (props) => {
 
   const [localFonts, setLocalFonts] = useState<string[]>()
 
-  const { fontFamily, fontSize, fontWeight, lineHeight, zoom, spread } =
+  const {
+    fontFamily,
+    fontSize,
+    fontWeight,
+    lineHeight,
+    zoom,
+    spread,
+    textAlign,
+    maxWidth,
+  } =
     scope === TypographyScope.Book
       ? focusedBookTab?.book.configuration?.typography ?? defaultSettings
       : settings
@@ -162,6 +172,32 @@ export const TypographyView: React.FC<PaneViewProps> = (props) => {
             setTypography('lineHeight', v || undefined)
           }}
         />
+        <Select
+          name={t('text_align')}
+          value={textAlign ?? ''}
+          onChange={(e) => {
+            setTypography(
+              'textAlign',
+              (e.target.value || undefined) as TextAlign | undefined,
+            )
+          }}
+        >
+          <option value="">{t('text_align.default')}</option>
+          <option value="justify">{t('text_align.justify')}</option>
+          <option value="left">{t('text_align.left')}</option>
+        </Select>
+        <Select
+          name={t('page_width')}
+          value={String(maxWidth ?? 800)}
+          onChange={(e) => {
+            setTypography('maxWidth', Number(e.target.value))
+          }}
+        >
+          <option value="600">{t('page_width.narrow')}</option>
+          <option value="800">{t('page_width.standard')}</option>
+          <option value="1000">{t('page_width.wide')}</option>
+          <option value="9999">{t('page_width.full')}</option>
+        </Select>
         <NumberField
           name={t('zoom')}
           min={1}
