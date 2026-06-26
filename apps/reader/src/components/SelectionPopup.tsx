@@ -343,17 +343,34 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     }
   }, [iframe, translate, speak])
 
+  // close the box and return to a clean state (no box, no highlight, no audio)
   useEffect(() => {
     if (!popup) return
-    const onClick = (e: MouseEvent) => {
-      if (dragging.current) return
-      if (popupRef.current?.contains(e.target as Node)) return
+    const reset = () => {
+      setFading(false)
       setPopup(null)
       stopAudio()
+      clearSelection()
     }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [popup])
+    const onDown = (e: MouseEvent) => {
+      if (dragging.current) return
+      if (popupRef.current?.contains(e.target as Node)) return
+      reset()
+    }
+    // Esc works no matter where focus is; the reading content lives in an
+    // iframe whose clicks never reach the parent document, so listen on both
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') reset()
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    iframe?.addEventListener('keydown', onKey as any)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+      iframe?.removeEventListener('keydown', onKey as any)
+    }
+  }, [popup, iframe, clearSelection])
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     const el = popupRef.current
