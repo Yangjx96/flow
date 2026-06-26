@@ -1,6 +1,6 @@
 import { Overlay } from '@literal-ui/core'
 import clsx from 'clsx'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { IconType } from 'react-icons'
 import { MdClose, MdToc } from 'react-icons/md'
 import { RiFontSize, RiSettings5Line } from 'react-icons/ri'
@@ -13,14 +13,36 @@ import { TypographyView } from './viewlets/TypographyView'
 
 type Panel = 'typography' | 'toc' | 'settings'
 
-interface ReaderMenuProps {
-  // mirrors the auto-hiding reader chrome so the launcher fades with it
-  visible: boolean
-}
+// only reveal the launcher when the cursor reaches the far-right blank margin
+const EDGE = 96
 
-export const ReaderMenu: React.FC<ReaderMenuProps> = ({ visible }) => {
+export const ReaderMenu: React.FC = () => {
   const [panel, setPanel] = useState<Panel | null>(null)
+  const [nearEdge, setNearEdge] = useState(false)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const t = useTranslation()
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (e.clientX > window.innerWidth - EDGE) {
+        if (hideTimer.current) {
+          clearTimeout(hideTimer.current)
+          hideTimer.current = null
+        }
+        setNearEdge(true)
+      } else if (!hideTimer.current) {
+        hideTimer.current = setTimeout(() => {
+          setNearEdge(false)
+          hideTimer.current = null
+        }, 500)
+      }
+    }
+    document.addEventListener('mousemove', onMove)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      if (hideTimer.current) clearTimeout(hideTimer.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (!panel) return
@@ -42,7 +64,7 @@ export const ReaderMenu: React.FC<ReaderMenuProps> = ({ visible }) => {
       <div
         className={clsx(
           'ReaderMenu bg-surface/70 fixed right-2 top-1/2 z-30 flex -translate-y-1/2 flex-col gap-0.5 rounded-full p-1 backdrop-blur transition-opacity duration-300',
-          panel || !visible ? 'pointer-events-none opacity-0' : 'opacity-100',
+          panel || !nearEdge ? 'pointer-events-none opacity-0' : 'opacity-100',
         )}
         style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.12)' }}
       >

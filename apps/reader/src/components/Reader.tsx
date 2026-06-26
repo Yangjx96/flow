@@ -286,6 +286,34 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
 
   useEffect(() => applyCustomStyle(), [applyCustomStyle])
 
+  // A font/line-height/alignment change reflows the content but doesn't resize
+  // the container, so epub never recounts pages and the page number goes stale.
+  // Re-display the current location to force a fresh pagination.
+  const layoutKey = [
+    typography.fontSize,
+    typography.fontWeight,
+    typography.fontFamily,
+    typography.lineHeight,
+    typography.textAlign,
+    typography.letterSpacing,
+    typography.zoom,
+  ].join('|')
+  const lastLayoutKey = useRef<string | null>(null)
+  useEffect(() => {
+    if (!rendition) return
+    if (lastLayoutKey.current === null) {
+      lastLayoutKey.current = layoutKey
+      return
+    }
+    if (lastLayoutKey.current === layoutKey) return
+    lastLayoutKey.current = layoutKey
+    const id = setTimeout(() => {
+      const cfi = tab.location?.start?.cfi
+      if (cfi) rendition.display(cfi)
+    }, 300)
+    return () => clearTimeout(id)
+  }, [layoutKey, rendition, tab])
+
   useEffect(() => {
     if (dark === undefined) return
     rendition?.themes.override('color', dark ? '#bfc8ca' : '#3f484a', dark)
@@ -436,7 +464,7 @@ function BookPane({ tab, onMouseDown }: BookPaneProps) {
       <ReaderPaneFooter tab={tab} />
       <KindleProgress tab={tab} />
       <ProgressBar percentage={percentage} />
-      <ReaderMenu visible={chromeVisible} />
+      <ReaderMenu />
     </div>
   )
 }
