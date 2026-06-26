@@ -69,6 +69,9 @@ export default {
   'settings.tts.voice': '音声',
   'settings.tts.speed': '速度',
   'settings.tts.model': 'モデル',
+  'settings.tts.max_words': '読み上げ単語数の上限',
+  'settings.tts.max_words.hint':
+    '0 = 無制限。これを超える選択範囲は読み上げません。',
   'settings.interaction': '操作',
   'settings.trigger': 'トリガー',
   'settings.trigger.shortcut': 'ショートカットキー',

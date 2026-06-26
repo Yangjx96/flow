@@ -85,6 +85,8 @@ export interface TtsConfig {
   ttsModel: string
   voice: string
   speed: number
+  // skip pronunciation when the selection is longer than this (0 = no limit)
+  ttsMaxWords: number
 }
 
 export const defaultTtsConfig: TtsConfig = {
@@ -99,6 +101,7 @@ export const defaultTtsConfig: TtsConfig = {
   ttsModel: 'tts-1',
   voice: 'alloy',
   speed: 1.0,
+  ttsMaxWords: 30,
 }
 
 const ttsConfigState = atom<TtsConfig>({

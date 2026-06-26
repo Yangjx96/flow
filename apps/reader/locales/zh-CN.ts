@@ -69,6 +69,8 @@ export default {
   'settings.tts.voice': '音色',
   'settings.tts.speed': '语速',
   'settings.tts.model': '模型',
+  'settings.tts.max_words': '发音词数上限',
+  'settings.tts.max_words.hint': '0 = 不限制。超过该词数的选段不会朗读。',
   'settings.interaction': '交互',
   'settings.trigger': '触发方式',
   'settings.trigger.shortcut': '快捷键',

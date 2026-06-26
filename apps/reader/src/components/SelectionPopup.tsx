@@ -116,8 +116,12 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   }, [])
 
   const speak = useCallback((sel: PopupState) => {
-    if (!cfg.current.ttsEnabled) return
-    playTts(sel.text, cfg.current)
+    const c = cfg.current
+    if (!c.ttsEnabled) return
+    // skip long selections so reading a sentence doesn't fire pronunciation
+    const max = c.ttsMaxWords ?? 30
+    if (max > 0 && sel.text.trim().split(/\s+/).length > max) return
+    playTts(sel.text, c)
   }, [])
 
   // capture selection; only auto-trigger when the user opted into it

@@ -189,6 +189,20 @@ const TtsSettings: React.FC = () => {
                 ))}
               </Select>
             </Field>
+            <Field name={t('tts.max_words')}>
+              <input
+                type="number"
+                min={0}
+                className="bg-default text-on-surface-variant w-24 px-1.5 py-1 !text-[13px]"
+                value={cfg.ttsMaxWords ?? 30}
+                onChange={(e) =>
+                  update({ ttsMaxWords: Math.max(0, Number(e.target.value) || 0) })
+                }
+              />
+              <p className="text-outline mt-1 !text-[12px]">
+                {t('tts.max_words.hint')}
+              </p>
+            </Field>
             <Advanced
               open={advanced}
               onToggle={() => setAdvanced((v) => !v)}

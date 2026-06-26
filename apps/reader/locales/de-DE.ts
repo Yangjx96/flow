@@ -69,6 +69,9 @@ export default {
   'settings.tts.voice': 'Stimme',
   'settings.tts.speed': 'Geschwindigkeit',
   'settings.tts.model': 'Modell',
+  'settings.tts.max_words': 'Wortlimit für Aussprache',
+  'settings.tts.max_words.hint':
+    '0 = kein Limit. Längere Auswahlen werden nicht vorgelesen.',
   'settings.interaction': 'Interaktion',
   'settings.trigger': 'Auslöser',
   'settings.trigger.shortcut': 'Tastenkürzel',
