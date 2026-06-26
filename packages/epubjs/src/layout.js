@@ -107,9 +107,11 @@ class Layout {
     var gap = _gap || 0
 
     //-- Check the width and create even width columns
-    // var fullWidth = Math.floor(_width);
-    var width = _width
-    var height = _height
+    // integer dimensions keep columnWidth/pageWidth/delta whole, so scroll
+    // positions stay exact multiples and page numbers don't drift on
+    // fractional (zoomed/HiDPI) viewports
+    var width = Math.floor(_width)
+    var height = Math.floor(_height)
 
     var section = Math.floor(width / 12)
 

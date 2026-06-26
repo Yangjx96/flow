@@ -839,9 +839,14 @@ class DefaultViewManager {
       )
 
       let totalPages = this.layout.count(width).pages
-      let startPage = Math.floor(start / this.layout.pageWidth)
+      // small epsilon: when pageWidth is fractional (e.g. browser zoom) the
+      // browser snaps scrollLeft to whole pixels, so start/pageWidth can land
+      // at k-0.0006 and floor() drops to the previous page — causing repeated
+      // and skipped page numbers (1,1,2,4,...). Nudge past the boundary.
+      const EPS = 0.01
+      let startPage = Math.floor(start / this.layout.pageWidth + EPS)
       let pages = []
-      let endPage = Math.floor(end / this.layout.pageWidth)
+      let endPage = Math.floor(end / this.layout.pageWidth + EPS)
 
       // start page should not be negative
       if (startPage < 0) {
