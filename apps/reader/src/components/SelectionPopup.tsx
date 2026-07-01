@@ -221,7 +221,12 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     setTranslation('')
     translateText(sel.text, cfg.current).then((t) => {
       if (id === reqId.current) {
-        setTranslation(t)
+        // strip any indent the model echoes back; for a phrase/sentence flatten
+        // it to one clean paragraph, but keep a single word's dictionary layout
+        const multiWord = /\s/.test(sel.text.trim())
+        let out = (t || '').replace(/^[ \t\u3000\u00a0]+/gm, '')
+        if (multiWord) out = out.replace(/\s+/g, ' ').trim()
+        setTranslation(out)
         setLoading(false)
       }
     })
@@ -268,7 +273,11 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
       }
       if (!text || !iframeEl) return
       const rect = iframeEl.getBoundingClientRect()
-      const data = { text, x: clientX + rect.left, y: clientY + rect.top }
+      // a multi-line selection carries the epub's source line breaks and
+      // indentation; collapse them so the model gets one clean paragraph and
+      // doesn't echo the indent back into the translation
+      const clean = text.replace(/\s+/g, ' ').trim()
+      const data = { text: clean, x: clientX + rect.left, y: clientY + rect.top }
       selection.current = data
       if (c.autoOnSelect) {
         translate(data)
