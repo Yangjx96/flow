@@ -221,12 +221,10 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     setTranslation('')
     translateText(sel.text, cfg.current).then((t) => {
       if (id === reqId.current) {
-        // strip any indent the model echoes back; for a phrase/sentence flatten
-        // it to one clean paragraph, but keep a single word's dictionary layout
-        const multiWord = /\s/.test(sel.text.trim())
-        let out = (t || '').replace(/^[ \t\u3000\u00a0]+/gm, '')
-        if (multiWord) out = out.replace(/\s+/g, ' ').trim()
-        setTranslation(out)
+        // show the model's output verbatim (no post-processing, so a custom
+        // model / prompt keeps full control of formatting); the stray indent
+        // is already prevented by cleaning the input in `capture`
+        setTranslation(t)
         setLoading(false)
       }
     })
