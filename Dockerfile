@@ -46,5 +46,8 @@ COPY --from=installer /app/apps/reader/package.json .
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=installer --chown=nextjs:nodejs /app/apps/reader/.next/standalone ./
 COPY --from=installer --chown=nextjs:nodejs /app/apps/reader/.next/static ./apps/reader/.next/static
+# standalone output doesn't bundle public/, so favicon, manifest and PWA icons
+# would 404 without this copy
+COPY --from=installer --chown=nextjs:nodejs /app/apps/reader/public ./apps/reader/public
 
 CMD node apps/reader/server.js

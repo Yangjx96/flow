@@ -3,7 +3,7 @@ import clsx from 'clsx'
 import { useLiveQuery } from 'dexie-react-hooks'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   MdCheckBox,
   MdCheckBoxOutlineBlank,
@@ -77,6 +77,22 @@ export default function Index() {
       return true
     })
   }, [router])
+
+  // on a fresh load, resume the most recently read book at its last position
+  const autoOpened = useRef(false)
+  useEffect(() => {
+    if (autoOpened.current) return
+    if (src) return // a remote ?src book is being loaded instead
+    if (reader.groups.length) return
+    autoOpened.current = true
+    db?.books.toArray().then((books) => {
+      const last = books
+        ?.filter((b) => b.cfi)
+        .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
+      if (last && !reader.groups.length) reader.addTab(last)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <>
