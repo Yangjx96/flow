@@ -140,13 +140,14 @@ export function useServerSettingsSync() {
       if (s === lastSynced.current) return
       lastSynced.current = s
       try {
+        // no setStamp here: the beacon may not land, and stamping would make
+        // the next load think local is newer than the cloud and skip the pull
         navigator.sendBeacon(
           '/api/sync/settings',
           new Blob([JSON.stringify({ data: payload, updatedAt: Date.now() })], {
             type: 'application/json',
           }),
         )
-        setStamp(Date.now())
       } catch {}
     }
     window.addEventListener('pagehide', flush)
