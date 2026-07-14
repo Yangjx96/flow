@@ -57,12 +57,23 @@ export async function playTts(
     const url = URL.createObjectURL(blob)
     const audio = new Audio(url)
     currentAudio = audio
-    audio.onended = () => {
+    let finished = false
+    const finish = () => {
+      if (finished) return
+      finished = true
       URL.revokeObjectURL(url)
       if (currentAudio === audio) currentAudio = null
       onEnded?.()
     }
-    await audio.play()
+    audio.onended = finish
+    audio.onerror = finish
+    try {
+      await audio.play()
+    } catch {
+      // autoplay blocked / decode failure: treat as ended so the
+      // auto-dismiss flow is never left hanging
+      finish()
+    }
   } catch {}
 }
 
