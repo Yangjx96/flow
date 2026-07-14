@@ -69,6 +69,9 @@ export function useServerSettingsSync() {
   const [cfg, setCfg] = useTtsConfig()
   const [settings, setSettings] = useSettings()
   const pulled = useRef(false)
+  // bumped when the initial pull finishes so the push effect re-evaluates
+  // (otherwise local-only state from before the pull would never be pushed)
+  const [pullTick, setPullTick] = useState(0)
   const lastSynced = useRef('')
   const latest = useRef({ cfg, settings })
   latest.current = { cfg, settings }
@@ -91,6 +94,7 @@ export function useServerSettingsSync() {
       setStamp(snap.updatedAt)
     }
     pulled.current = true
+    setPullTick((t) => t + 1)
   }
 
   useEffect(() => {
@@ -121,7 +125,8 @@ export function useServerSettingsSync() {
       })
     }, 2000)
     return () => clearTimeout(t)
-  }, [cfg, settings])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfg, settings, pullTick])
 
   // flush pending changes (e.g. popup resize, which bypasses recoil) on leave
   useEffect(() => {
@@ -154,6 +159,9 @@ export function useServerSettingsSync() {
 // (tap a cloud book) to save bandwidth on light devices.
 export function useServerLibrarySync() {
   const ready = useRef(false)
+  // see useServerSettingsSync: re-arm the push/upload effects once the
+  // initial pull completes, since the live queries fired before it
+  const [pullTick, setPullTick] = useState(0)
   const lastPushed = useRef('')
   const uploading = useRef(new Set<string>())
 
@@ -205,6 +213,7 @@ export function useServerLibrarySync() {
       console.error('library sync pull failed', e)
     }
     ready.current = true
+    setPullTick((t) => t + 1)
   }
 
   useEffect(() => {
@@ -233,7 +242,8 @@ export function useServerLibrarySync() {
       pushData(books, mergeTombstones(localTombstones()))
     }, 3000)
     return () => clearTimeout(t)
-  }, [books])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [books, pullTick])
 
   // auto-upload epub files that exist locally but not on the server
   const fileIds = useLiveQuery(
@@ -268,5 +278,6 @@ export function useServerLibrarySync() {
         await pushCovers(remoteCovers)
       }
     })()
-  }, [fileIds])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileIds, pullTick])
 }
