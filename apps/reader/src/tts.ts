@@ -7,8 +7,12 @@ import {
 } from './state'
 
 let currentAudio: HTMLAudioElement | null = null
+// generation counter: bumped on every stopAudio/playTts so that slow TTS
+// responses from older triggers are dropped instead of piling up
+let playSeq = 0
 
 export function stopAudio() {
+  playSeq++
   if (currentAudio) {
     try {
       currentAudio.pause()
@@ -28,6 +32,7 @@ export async function playTts(
   if (!config.ttsEnabled) return
 
   stopAudio()
+  const id = playSeq
 
   const api = activeTtsPreset(config)
 
@@ -44,9 +49,11 @@ export async function playTts(
         speed: config.speed,
       }),
     })
-    if (!res.ok) return
+    // a newer pronunciation started (or Esc stopped everything) meanwhile
+    if (id !== playSeq || !res.ok) return
 
     const blob = await res.blob()
+    if (id !== playSeq) return
     const url = URL.createObjectURL(blob)
     const audio = new Audio(url)
     currentAudio = audio

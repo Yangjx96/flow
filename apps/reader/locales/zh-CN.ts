@@ -108,6 +108,8 @@ export default {
   'settings.api_note': '留空则使用服务器默认配置。',
   'settings.api_url': 'API 地址',
   'settings.api_key': 'API 密钥',
+  'settings.api_url_hint': '只填域名会自动补全为',
+  'settings.preset.show_key': '显示/隐藏密钥',
   'settings.sync': '多端同步',
   'settings.sync.enable': '启用服务器同步',
   'settings.sync.status.on': '已连接，设置与书库会在多端之间同步。',

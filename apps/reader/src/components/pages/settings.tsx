@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
+import { MdVisibility, MdVisibilityOff } from 'react-icons/md'
 
 import {
   ColorScheme,
@@ -24,6 +25,22 @@ import { Page } from '../Page'
 
 const genId = () => Math.random().toString(36).slice(2, 10)
 
+// let the user paste just a domain: add https:// and the endpoint path
+function normalizeApiUrl(input: string, defaultPath?: string) {
+  let t = input.trim()
+  if (!t) return t
+  if (!/^https?:\/\//i.test(t)) t = `https://${t}`
+  if (!defaultPath) return t
+  try {
+    const u = new URL(t)
+    if (u.pathname === '/' || u.pathname === '') {
+      u.pathname = defaultPath
+      return u.toString()
+    }
+  } catch {}
+  return t
+}
+
 export const Settings: React.FC = () => {
   const { scheme, setScheme } = useColorScheme()
   const { asPath, push, locale, locales } = useRouter()
@@ -31,7 +48,7 @@ export const Settings: React.FC = () => {
 
   return (
     <Page headline={t('title')}>
-      <div className="space-y-6">
+      <div className="max-w-xl space-y-6">
         <Section title={t('appearance')}>
           <Field name={t('color_scheme')}>
             <Select
@@ -170,8 +187,18 @@ const TranslateSettings: React.FC = () => {
                   activeId={activeId}
                   onCommit={commit}
                   showPrompt
+                  modelDatalist={[
+                    'gpt-4o-mini',
+                    'gpt-4o',
+                    'gpt-4.1-mini',
+                    'deepseek-chat',
+                    'deepseek-reasoner',
+                    'gemini-2.0-flash',
+                    'claude-3-5-haiku-latest',
+                  ]}
                   modelPlaceholder="gpt-4o-mini"
-                  urlPlaceholder="https://api.example.com/v1/chat/completions"
+                  urlPlaceholder="https://api.example.com"
+                  urlDefaultPath="/v1/chat/completions"
                 />
               </Advanced>
             )}
@@ -190,6 +217,7 @@ interface PresetManagerProps {
   modelDatalist?: string[]
   modelPlaceholder?: string
   urlPlaceholder?: string
+  urlDefaultPath?: string
 }
 const PresetManager: React.FC<PresetManagerProps> = ({
   presets,
@@ -199,8 +227,10 @@ const PresetManager: React.FC<PresetManagerProps> = ({
   modelDatalist,
   modelPlaceholder,
   urlPlaceholder,
+  urlDefaultPath,
 }) => {
   const t = useTranslation('settings')
+  const [showKey, setShowKey] = useState(false)
   const active = presets.find((p) => p.id === activeId) ?? presets[0]!
 
   const patchActive = (patch: Partial<ApiPreset>) => {
@@ -255,22 +285,38 @@ const PresetManager: React.FC<PresetManagerProps> = ({
             patchActive({ name: e.target.value })
           }
         />
-        <TextField
-          name={t('api_url')}
-          defaultValue={active.url}
-          onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-            patchActive({ url: e.target.value })
-          }
-          placeholder={urlPlaceholder}
-        />
+        <div>
+          <TextField
+            name={t('api_url')}
+            defaultValue={active.url}
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+              const v = normalizeApiUrl(e.target.value, urlDefaultPath)
+              e.target.value = v
+              patchActive({ url: v })
+            }}
+            placeholder={urlPlaceholder}
+          />
+          {urlDefaultPath && (
+            <p className="text-outline mt-0.5 !text-[11px]">
+              {t('api_url_hint')} {urlDefaultPath}
+            </p>
+          )}
+        </div>
         <TextField
           name={t('api_key')}
-          type="password"
+          type={showKey ? 'text' : 'password'}
           defaultValue={active.key}
           onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
             patchActive({ key: e.target.value })
           }
           placeholder="sk-..."
+          actions={[
+            {
+              title: t('preset.show_key'),
+              Icon: showKey ? MdVisibilityOff : MdVisibility,
+              onClick: () => setShowKey((v) => !v),
+            },
+          ]}
         />
         <TextField
           name={t('preset.model')}
@@ -398,7 +444,8 @@ const TtsSettings: React.FC = () => {
                 onCommit={commit}
                 modelDatalist={['tts-1', 'tts-1-hd', 'gpt-4o-mini-tts']}
                 modelPlaceholder="tts-1"
-                urlPlaceholder="https://api.example.com/v1/audio/speech"
+                urlPlaceholder="https://api.example.com"
+                urlDefaultPath="/v1/audio/speech"
               />
             </Advanced>
           </>

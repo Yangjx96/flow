@@ -10,6 +10,7 @@ import {
   useTtsConfig,
 } from '../state'
 import { playTts, translateText, stopAudio } from '../tts'
+import { isTypingTarget } from '../utils'
 
 interface PopupState {
   text: string
@@ -56,14 +57,6 @@ function saveSize(o: { w: number; h: number }) {
   try {
     localStorage.setItem('popupSize', JSON.stringify(o))
   } catch {}
-}
-
-// don't hijack a keystroke while the user is typing in a field
-function isTypingTarget() {
-  const el = document.activeElement as HTMLElement | null
-  if (!el) return false
-  const tag = el.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable
 }
 
 // a "word" stays together across letters, digits, accents and apostrophes;
@@ -144,6 +137,10 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   })
   const popupRef = useRef<HTMLDivElement>(null)
   const reqId = useRef(0)
+  const resultsRef = useRef<SourceResult[]>([])
+  // pronunciation ended before the translation landed; dismiss once it does
+  const pendingDismiss = useRef(false)
+  const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dragging = useRef(false)
   const popupData = useRef<PopupState | null>(null)
   const latestPos = useRef({ left: 0, top: 0 })
@@ -156,6 +153,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   iframeRef.current = iframe
   popupData.current = popup
   latestPos.current = pos
+  resultsRef.current = results
 
   useEffect(() => {
     if (!popup) return
@@ -224,9 +222,18 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     [clearSelection],
   )
 
+  const cancelPendingDismiss = useCallback(() => {
+    pendingDismiss.current = false
+    if (dismissTimer.current) {
+      clearTimeout(dismissTimer.current)
+      dismissTimer.current = null
+    }
+  }, [])
+
   const translate = useCallback((sel: PopupState) => {
     const c = cfg.current
     if (!c.translateEnabled) return
+    cancelPendingDismiss()
     setFading(false)
     setPopup(sel)
     const id = ++reqId.current
@@ -244,7 +251,8 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
         )
       })
     })
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cancelPendingDismiss])
 
   const speak = useCallback(
     (sel: PopupState) => {
@@ -254,11 +262,38 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
       const max = c.ttsMaxWords ?? 30
       if (max > 0 && sel.text.trim().split(/\s+/).length > max) return
       playTts(sel.text, c, () => {
-        if (cfg.current.autoDismiss ?? true) dismiss(true)
+        if (!(cfg.current.autoDismiss ?? true)) return
+        // auto-close waits for whichever finishes last: if the translation
+        // is still loading when the audio ends, defer until it settles
+        const rs = resultsRef.current
+        const settled =
+          !popupData.current || rs.length === 0 || rs.every((r) => r.done)
+        if (settled) {
+          dismiss(true)
+          return
+        }
+        pendingDismiss.current = true
+        // safety net so a hung translation can't hold the box forever
+        if (dismissTimer.current) clearTimeout(dismissTimer.current)
+        dismissTimer.current = setTimeout(() => {
+          if (pendingDismiss.current) {
+            pendingDismiss.current = false
+            dismiss(true)
+          }
+        }, 10000)
       })
     },
     [dismiss],
   )
+
+  // run the deferred auto-dismiss once the last translation result lands
+  useEffect(() => {
+    if (!pendingDismiss.current) return
+    if (results.length && results.every((r) => r.done)) {
+      cancelPendingDismiss()
+      dismiss(true)
+    }
+  }, [results, dismiss, cancelPendingDismiss])
 
   // capture selection (drag / click / hover) and optionally auto-trigger
   useEffect(() => {
@@ -309,6 +344,8 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
         const sel = iframe.getSelection()
         if (!sel?.toString().trim()) {
           selection.current = null
+          reqId.current++
+          cancelPendingDismiss()
           setPopup(null)
           stopAudio()
         }
@@ -338,6 +375,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
       iframe.removeEventListener('mousemove', onMouseMove)
       if (hoverTimer) clearTimeout(hoverTimer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [iframe, translate, speak])
 
   // keyboard shortcuts: translate / pronounce the current selection
@@ -370,6 +408,10 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   useEffect(() => {
     if (!popup) return
     const reset = () => {
+      // drop in-flight translations and any deferred auto-close;
+      // stopAudio also invalidates queued pronunciations
+      reqId.current++
+      cancelPendingDismiss()
       setFading(false)
       setPopup(null)
       stopAudio()
@@ -393,7 +435,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
       document.removeEventListener('keydown', onKey)
       iframe?.removeEventListener('keydown', onKey as any)
     }
-  }, [popup, iframe, clearSelection])
+  }, [popup, iframe, clearSelection, cancelPendingDismiss])
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     const el = popupRef.current

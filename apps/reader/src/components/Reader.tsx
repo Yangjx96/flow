@@ -31,6 +31,7 @@ import {
 import { BookTab, reader, useReaderSnapshot } from '../models'
 import { isTouchScreen } from '../platform'
 import { updateCustomStyle } from '../styles'
+import { isTypingTarget } from '../utils'
 
 import {
   getClickedAnnotation,
@@ -45,6 +46,8 @@ import * as pages from './pages'
 
 function handleKeyDown(tab?: BookTab) {
   return (e: KeyboardEvent) => {
+    // typing in a field (e.g. settings inputs) must not turn pages
+    if (isTypingTarget()) return
     try {
       switch (e.code) {
         case 'ArrowLeft':

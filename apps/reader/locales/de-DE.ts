@@ -109,6 +109,8 @@ export default {
   'settings.api_note': 'Leer lassen, um die Server-Vorgabe zu verwenden.',
   'settings.api_url': 'API-URL',
   'settings.api_key': 'API-Schlüssel',
+  'settings.api_url_hint': 'Nur Domain eingeben, ergänzt zu',
+  'settings.preset.show_key': 'Schlüssel ein-/ausblenden',
   'settings.sync': 'Synchronisierung',
   'settings.sync.enable': 'Server-Sync aktivieren',
   'settings.sync.status.on': 'Verbunden — Einstellungen und Bibliothek werden synchronisiert.',

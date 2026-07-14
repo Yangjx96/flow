@@ -109,6 +109,8 @@ export default {
   'settings.api_note': 'Leave blank to use the server default.',
   'settings.api_url': 'API URL',
   'settings.api_key': 'API Key',
+  'settings.api_url_hint': 'Domain-only input auto-completes to',
+  'settings.preset.show_key': 'Show/hide key',
   'settings.sync': 'Sync',
   'settings.sync.enable': 'Enable server sync',
   'settings.sync.status.on': 'Connected — settings and library sync across your devices.',

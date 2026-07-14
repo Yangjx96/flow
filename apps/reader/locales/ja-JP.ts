@@ -109,6 +109,8 @@ export default {
   'settings.api_note': '空欄の場合はサーバーの既定値を使用します。',
   'settings.api_url': 'API URL',
   'settings.api_key': 'APIキー',
+  'settings.api_url_hint': 'ドメインのみ入力すると自動補完:',
+  'settings.preset.show_key': 'キーを表示/非表示',
   'settings.sync': '同期',
   'settings.sync.enable': 'サーバー同期を有効化',
   'settings.sync.status.on': '接続済み — 設定とライブラリを同期します。',
