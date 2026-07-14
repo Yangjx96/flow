@@ -209,10 +209,10 @@ const PresetManager: React.FC<PresetManagerProps> = ({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-3">
         <Select
           name={t('preset')}
-          className="min-w-0 flex-1"
+          className="w-56"
           value={active.id}
           onChange={(e) => onCommit(presets, e.target.value)}
         >
