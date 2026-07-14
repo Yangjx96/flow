@@ -39,10 +39,30 @@ export function readJson<T>(file: string): T | null {
   }
 }
 
-export function writeJson(file: string, data: unknown) {
+const HISTORY_KEEP = 30
+
+export function writeJson(file: string, data: unknown, keepHistory = true) {
   const dir = syncDir()
   fs.mkdirSync(dir, { recursive: true })
   const target = path.join(dir, file)
+  // snapshot the previous version so a bad overwrite (stale tab pushing old
+  // state, a sync bug, an accidental wipe) can always be rolled back
+  if (keepHistory) {
+    try {
+      if (fs.existsSync(target)) {
+        const histDir = path.join(dir, 'history')
+        fs.mkdirSync(histDir, { recursive: true })
+        fs.copyFileSync(target, path.join(histDir, `${file}.${Date.now()}`))
+        const old = fs
+          .readdirSync(histDir)
+          .filter((f) => f.startsWith(`${file}.`))
+          .sort()
+        while (old.length > HISTORY_KEEP) {
+          fs.unlinkSync(path.join(histDir, old.shift()!))
+        }
+      }
+    } catch {}
+  }
   const tmp = `${target}.tmp`
   fs.writeFileSync(tmp, JSON.stringify(data))
   fs.renameSync(tmp, target)

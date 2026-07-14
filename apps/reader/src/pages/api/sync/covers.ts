@@ -15,7 +15,8 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'PUT') {
     if (!req.body || typeof req.body !== 'object')
       return res.status(400).end()
-    writeJson('covers.json', req.body)
+    // covers are large and regenerable — no history snapshots
+    writeJson('covers.json', req.body, false)
     return res.json({ ok: true })
   }
 
