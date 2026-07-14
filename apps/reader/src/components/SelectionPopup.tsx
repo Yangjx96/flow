@@ -3,13 +3,25 @@ import { useSnapshot } from 'valtio'
 
 import { useColorScheme } from '../hooks'
 import { BookTab } from '../models'
-import { useTtsConfig } from '../state'
+import {
+  TranslateSource,
+  activeLlmPreset,
+  activeSources,
+  useTtsConfig,
+} from '../state'
 import { playTts, translateText, stopAudio } from '../tts'
 
 interface PopupState {
   text: string
   x: number
   y: number
+}
+
+// one slot per enabled source; each fills in as its request completes
+interface SourceResult {
+  source: TranslateSource
+  text: string
+  done: boolean
 }
 
 interface SelectionPopupProps {
@@ -123,8 +135,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const { dark } = useColorScheme()
   const [ttsConfig] = useTtsConfig()
   const [popup, setPopup] = useState<PopupState | null>(null)
-  const [translation, setTranslation] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [results, setResults] = useState<SourceResult[]>([])
   const [fading, setFading] = useState(false)
   const [pos, setPos] = useState({ left: 0, top: 0 })
   const [size, setSize] = useState<{ w: number; h: number | null }>(() => {
@@ -170,7 +181,8 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   }, [popup?.text, popup?.x, popup?.y])
 
   // once the box has real dimensions (e.g. a long translation), pull it fully
-  // back into the viewport instead of letting it run off the bottom
+  // back into the viewport instead of letting it run off the bottom; re-runs
+  // as each async source result lands and grows the box
   useEffect(() => {
     const el = popupRef.current
     if (!popup || !el) return
@@ -185,7 +197,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
       if (left < m) left = m
       return left === p.left && top === p.top ? p : { left, top }
     })
-  }, [popup?.text, translation, loading])
+  }, [popup?.text, results])
 
   const clearSelection = useCallback(() => {
     try {
@@ -213,20 +225,24 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   )
 
   const translate = useCallback((sel: PopupState) => {
-    if (!cfg.current.translateEnabled) return
+    const c = cfg.current
+    if (!c.translateEnabled) return
     setFading(false)
     setPopup(sel)
     const id = ++reqId.current
-    setLoading(true)
-    setTranslation('')
-    translateText(sel.text, cfg.current).then((t) => {
-      if (id === reqId.current) {
+    const sources = activeSources(c)
+    setResults(sources.map((s) => ({ source: s, text: '', done: false })))
+    // fire all sources concurrently; each slot fills in as its result lands
+    sources.forEach((src) => {
+      translateText(sel.text, c, src).then((t) => {
+        if (id !== reqId.current) return
         // show the model's output verbatim (no post-processing, so a custom
         // model / prompt keeps full control of formatting); the stray indent
         // is already prevented by cleaning the input in `capture`
-        setTranslation(t)
-        setLoading(false)
-      }
+        setResults((prev) =>
+          prev.map((r) => (r.source === src ? { ...r, text: t, done: true } : r)),
+        )
+      })
     })
   }, [])
 
@@ -435,6 +451,9 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
 
   if (!popup) return null
 
+  const dim = dark ? '#666' : '#999'
+  const llmLabel = activeLlmPreset(ttsConfig).name || 'AI'
+
   return (
     <>
       <style>{`.sp-box::-webkit-resizer{display:none}`}</style>
@@ -465,20 +484,49 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
         }}
         onMouseDown={handleDragStart}
       >
-        <div
-          style={{
-            fontSize: 15,
-            lineHeight: 1.5,
-            color: dark ? '#ddd' : '#222',
-            whiteSpace: 'pre-wrap',
-          }}
-        >
-          {loading ? (
-            <span style={{ color: dark ? '#666' : '#999' }}>...</span>
-          ) : (
-            translation
-          )}
-        </div>
+        {results.map((r, i) => (
+          <div
+            key={r.source}
+            style={{
+              marginTop: i ? 6 : 0,
+              paddingTop: i ? 6 : 0,
+              borderTop: i
+                ? `1px solid ${
+                    dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)'
+                  }`
+                : undefined,
+            }}
+          >
+            {results.length > 1 && (
+              <div
+                style={{
+                  fontSize: 10,
+                  lineHeight: 1,
+                  letterSpacing: '0.06em',
+                  color: dim,
+                  marginBottom: 3,
+                  userSelect: 'none',
+                }}
+              >
+                {r.source === 'google' ? 'Google' : llmLabel}
+              </div>
+            )}
+            <div
+              style={{
+                fontSize: 15,
+                lineHeight: 1.5,
+                color: dark ? '#ddd' : '#222',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {r.done ? (
+                r.text || <span style={{ color: dim }}>—</span>
+              ) : (
+                <span style={{ color: dim }}>...</span>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </>
   )

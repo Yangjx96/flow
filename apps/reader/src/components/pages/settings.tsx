@@ -7,12 +7,20 @@ import {
   useColorScheme,
   useTranslation,
 } from '@flow/reader/hooks'
-import { useTtsConfig, TtsConfig } from '@flow/reader/state'
+import {
+  useTtsConfig,
+  TtsConfig,
+  ApiPreset,
+  TranslateSource,
+  activeSources,
+} from '@flow/reader/state'
 
 import { localeNames } from '../../../locales'
 import { Button } from '../Button'
-import { Checkbox, Select, TextField } from '../Form'
+import { Checkbox, Label, Select, TextField } from '../Form'
 import { Page } from '../Page'
+
+const genId = () => Math.random().toString(36).slice(2, 10)
 
 export const Settings: React.FC = () => {
   const { scheme, setScheme } = useColorScheme()
@@ -77,6 +85,50 @@ const TranslateSettings: React.FC = () => {
   const [advanced, setAdvanced] = useState(false)
   const update = (patch: Partial<TtsConfig>) => setCfg({ ...cfg, ...patch })
 
+  const sources = activeSources(cfg)
+  const toggleSource = (s: TranslateSource) => {
+    let next = sources.includes(s)
+      ? sources.filter((x) => x !== s)
+      : [...sources, s]
+    if (!next.length) return // keep at least one source
+    // stable display order: google above llm
+    next = (['google', 'llm'] as TranslateSource[]).filter((x) =>
+      next.includes(x),
+    )
+    update({
+      translateSources: next,
+      // mirror into the legacy field so a rollback keeps working
+      translateMethod: next.includes('llm') ? 'llm' : 'google',
+    })
+  }
+
+  // seed the preset list from the legacy single config on first use
+  const presets: ApiPreset[] = cfg.llmPresets?.length
+    ? cfg.llmPresets
+    : [
+        {
+          id: 'default',
+          name: t('preset.default'),
+          url: cfg.llmApi.url,
+          key: cfg.llmApi.key,
+        },
+      ]
+  const activeId =
+    cfg.llmActiveId && presets.some((p) => p.id === cfg.llmActiveId)
+      ? cfg.llmActiveId
+      : presets[0]!.id
+
+  const commit = (list: ApiPreset[], id: string) => {
+    const a = list.find((p) => p.id === id) ?? list[0]
+    update({
+      llmPresets: list,
+      llmActiveId: a?.id,
+      // mirror the active preset into the legacy field (server env fallback
+      // and older builds keep working)
+      llmApi: { url: a?.url ?? '', key: a?.key ?? '' },
+    })
+  }
+
   return (
     <Section title={t('translation')}>
       <div className="space-y-3">
@@ -87,18 +139,21 @@ const TranslateSettings: React.FC = () => {
         />
         {cfg.translateEnabled && (
           <>
-            <Field name={t('translation.method')}>
-              <Select
-                value={cfg.translateMethod}
-                onChange={(e) =>
-                  update({ translateMethod: e.target.value as 'google' | 'llm' })
-                }
-              >
-                <option value="google">{t('translation.google')}</option>
-                <option value="llm">{t('translation.llm')}</option>
-              </Select>
+            <Field name={t('translation.sources')}>
+              <div className="mt-1 space-y-2">
+                <Checkbox
+                  name={t('translation.google')}
+                  checked={sources.includes('google')}
+                  onChange={() => toggleSource('google')}
+                />
+                <Checkbox
+                  name={t('translation.llm')}
+                  checked={sources.includes('llm')}
+                  onChange={() => toggleSource('llm')}
+                />
+              </div>
             </Field>
-            {cfg.translateMethod === 'llm' && (
+            {sources.includes('llm') && (
               <Advanced
                 open={advanced}
                 onToggle={() => setAdvanced((v) => !v)}
@@ -107,22 +162,13 @@ const TranslateSettings: React.FC = () => {
                 <p className="text-outline mb-2 text-[12px]">
                   {t('api_note')}
                 </p>
-                <TextField
-                  name={t('api_url')}
-                  defaultValue={cfg.llmApi.url}
-                  onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-                    update({ llmApi: { ...cfg.llmApi, url: e.target.value } })
-                  }
-                  placeholder="https://api.example.com/v1/chat/completions"
-                />
-                <TextField
-                  name={t('api_key')}
-                  type="password"
-                  defaultValue={cfg.llmApi.key}
-                  onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-                    update({ llmApi: { ...cfg.llmApi, key: e.target.value } })
-                  }
-                  placeholder="sk-..."
+                <PresetManager
+                  presets={presets}
+                  activeId={activeId}
+                  onCommit={commit}
+                  showPrompt
+                  modelPlaceholder="gpt-4o-mini"
+                  urlPlaceholder="https://api.example.com/v1/chat/completions"
                 />
               </Advanced>
             )}
@@ -133,11 +179,157 @@ const TranslateSettings: React.FC = () => {
   )
 }
 
+interface PresetManagerProps {
+  presets: ApiPreset[]
+  activeId: string
+  onCommit: (presets: ApiPreset[], activeId: string) => void
+  showPrompt?: boolean
+  modelDatalist?: string[]
+  modelPlaceholder?: string
+  urlPlaceholder?: string
+}
+const PresetManager: React.FC<PresetManagerProps> = ({
+  presets,
+  activeId,
+  onCommit,
+  showPrompt,
+  modelDatalist,
+  modelPlaceholder,
+  urlPlaceholder,
+}) => {
+  const t = useTranslation('settings')
+  const active = presets.find((p) => p.id === activeId) ?? presets[0]!
+
+  const patchActive = (patch: Partial<ApiPreset>) => {
+    onCommit(
+      presets.map((p) => (p.id === active.id ? { ...p, ...patch } : p)),
+      active.id,
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-end gap-2">
+        <Select
+          name={t('preset')}
+          className="min-w-0 flex-1"
+          value={active.id}
+          onChange={(e) => onCommit(presets, e.target.value)}
+        >
+          {presets.map((p, i) => (
+            <option key={p.id} value={p.id}>
+              {p.name || `#${i + 1}`}
+            </option>
+          ))}
+        </Select>
+        <button
+          className="text-outline hover:text-on-surface-variant shrink-0 pb-1 !text-[12px]"
+          onClick={() => {
+            const id = genId()
+            onCommit([...presets, { id, name: '', url: '', key: '' }], id)
+          }}
+        >
+          ＋ {t('preset.add')}
+        </button>
+        {presets.length > 1 && (
+          <button
+            className="text-outline hover:text-on-surface-variant shrink-0 pb-1 !text-[12px]"
+            onClick={() => {
+              const rest = presets.filter((p) => p.id !== active.id)
+              onCommit(rest, rest[0]!.id)
+            }}
+          >
+            − {t('preset.remove')}
+          </button>
+        )}
+      </div>
+      {/* remount on preset switch so the uncontrolled fields show its values */}
+      <div key={active.id} className="space-y-2">
+        <TextField
+          name={t('preset.name')}
+          defaultValue={active.name}
+          onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+            patchActive({ name: e.target.value })
+          }
+        />
+        <TextField
+          name={t('api_url')}
+          defaultValue={active.url}
+          onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+            patchActive({ url: e.target.value })
+          }
+          placeholder={urlPlaceholder}
+        />
+        <TextField
+          name={t('api_key')}
+          type="password"
+          defaultValue={active.key}
+          onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+            patchActive({ key: e.target.value })
+          }
+          placeholder="sk-..."
+        />
+        <TextField
+          name={t('preset.model')}
+          defaultValue={active.model ?? ''}
+          onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+            patchActive({ model: e.target.value })
+          }
+          placeholder={modelPlaceholder}
+          datalist={modelDatalist?.map((m) => (
+            <option key={m} value={m} />
+          ))}
+        />
+        {showPrompt && (
+          <div>
+            <Label name={t('preset.prompt')} />
+            <textarea
+              className="bg-default text-on-surface-variant placeholder:text-outline/60 scroll w-full resize-none px-1.5 py-1 !text-[13px]"
+              rows={3}
+              defaultValue={active.systemPrompt ?? ''}
+              onBlur={(e) => patchActive({ systemPrompt: e.target.value })}
+              placeholder={t('preset.prompt_hint')}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const TtsSettings: React.FC = () => {
   const [cfg, setCfg] = useTtsConfig()
   const t = useTranslation('settings')
   const [advanced, setAdvanced] = useState(false)
   const update = (patch: Partial<TtsConfig>) => setCfg({ ...cfg, ...patch })
+
+  // seed the preset list from the legacy single config on first use
+  const presets: ApiPreset[] = cfg.ttsPresets?.length
+    ? cfg.ttsPresets
+    : [
+        {
+          id: 'default',
+          name: t('preset.default'),
+          url: cfg.ttsApi.url,
+          key: cfg.ttsApi.key,
+          model: cfg.ttsModel,
+        },
+      ]
+  const activeId =
+    cfg.ttsActiveId && presets.some((p) => p.id === cfg.ttsActiveId)
+      ? cfg.ttsActiveId
+      : presets[0]!.id
+
+  const commit = (list: ApiPreset[], id: string) => {
+    const a = list.find((p) => p.id === id) ?? list[0]
+    update({
+      ttsPresets: list,
+      ttsActiveId: a?.id,
+      // mirror the active preset into the legacy fields
+      ttsApi: { url: a?.url ?? '', key: a?.key ?? '' },
+      ...(a?.model ? { ttsModel: a.model } : {}),
+    })
+  }
 
   return (
     <Section title={t('tts')}>
@@ -177,18 +369,6 @@ const TtsSettings: React.FC = () => {
                 </Select>
               </Field>
             </div>
-            <Field name={t('tts.model')}>
-              <Select
-                value={cfg.ttsModel}
-                onChange={(e) => update({ ttsModel: e.target.value })}
-              >
-                {['tts-1', 'tts-1-hd', 'gpt-4o-mini-tts'].map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </Select>
-            </Field>
             <Field name={t('tts.max_words')}>
               <input
                 type="number"
@@ -209,22 +389,13 @@ const TtsSettings: React.FC = () => {
               label={t('advanced')}
             >
               <p className="text-outline mb-2 text-[12px]">{t('api_note')}</p>
-              <TextField
-                name={t('api_url')}
-                defaultValue={cfg.ttsApi.url}
-                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-                  update({ ttsApi: { ...cfg.ttsApi, url: e.target.value } })
-                }
-                placeholder="https://api.example.com/v1/audio/speech"
-              />
-              <TextField
-                name={t('api_key')}
-                type="password"
-                defaultValue={cfg.ttsApi.key}
-                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-                  update({ ttsApi: { ...cfg.ttsApi, key: e.target.value } })
-                }
-                placeholder="sk-..."
+              <PresetManager
+                presets={presets}
+                activeId={activeId}
+                onCommit={commit}
+                modelDatalist={['tts-1', 'tts-1-hd', 'gpt-4o-mini-tts']}
+                modelPlaceholder="tts-1"
+                urlPlaceholder="https://api.example.com/v1/audio/speech"
               />
             </Advanced>
           </>

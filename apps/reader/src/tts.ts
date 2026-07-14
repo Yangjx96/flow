@@ -1,4 +1,10 @@
-import { TtsConfig } from './state'
+import {
+  TranslateSource,
+  TtsConfig,
+  activeLlmPreset,
+  activeSources,
+  activeTtsPreset,
+} from './state'
 
 let currentAudio: HTMLAudioElement | null = null
 
@@ -23,15 +29,17 @@ export async function playTts(
 
   stopAudio()
 
+  const api = activeTtsPreset(config)
+
   try {
     const res = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text,
-        apiUrl: config.ttsApi.url,
-        apiKey: config.ttsApi.key,
-        model: config.ttsModel || 'tts-1',
+        apiUrl: api.url,
+        apiKey: api.key,
+        model: api.model || config.ttsModel || 'tts-1',
         voice: config.voice,
         speed: config.speed,
       }),
@@ -54,8 +62,12 @@ export async function playTts(
 export async function translateText(
   text: string,
   config: TtsConfig,
+  source?: TranslateSource,
 ): Promise<string> {
   if (!config.translateEnabled) return ''
+
+  const method = source ?? activeSources(config)[0]
+  const llm = activeLlmPreset(config)
 
   try {
     const res = await fetch('/api/translate', {
@@ -63,9 +75,11 @@ export async function translateText(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text,
-        method: config.translateMethod,
-        apiUrl: config.llmApi.url,
-        apiKey: config.llmApi.key,
+        method,
+        apiUrl: llm.url,
+        apiKey: llm.key,
+        model: llm.model || undefined,
+        systemPrompt: llm.systemPrompt || undefined,
       }),
     })
     if (!res.ok) return ''

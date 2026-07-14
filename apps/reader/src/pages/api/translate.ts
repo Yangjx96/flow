@@ -9,7 +9,7 @@ export default async function handler(
 ) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { text, method } = req.body
+  const { text, method, model, systemPrompt } = req.body
   if (!text) return res.status(400).end()
 
   // fall back to server-side env so the key never has to live in the browser
@@ -17,7 +17,7 @@ export default async function handler(
   const apiKey = req.body.apiKey || process.env.LLM_API_KEY
 
   if (method === 'llm' && apiUrl && apiKey) {
-    return llmTranslate(text, apiUrl, apiKey, res)
+    return llmTranslate(text, apiUrl, apiKey, res, model, systemPrompt)
   }
   return googleTranslate(text, res)
 }
@@ -57,25 +57,26 @@ async function googleTranslate(text: string, res: NextApiResponse) {
   }
 }
 
+const DEFAULT_PROMPT =
+  'You are a concise English-Chinese dictionary. For single words: give pronunciation (IPA), part of speech, and main Chinese meanings. For phrases/sentences: give only the Chinese translation. Keep it very short.'
+
 function llmTranslate(
   text: string,
   apiUrl: string,
   apiKey: string,
   res: NextApiResponse,
+  model?: string,
+  systemPrompt?: string,
 ) {
   const url = new URL(apiUrl)
   const client = url.protocol === 'https:' ? https : http
   const payload = JSON.stringify({
-    model: process.env.LLM_MODEL || 'gpt-4o-mini',
+    model: model || process.env.LLM_MODEL || 'gpt-4o-mini',
     messages: [
-      {
-        role: 'system',
-        content:
-          'You are a concise English-Chinese dictionary. For single words: give pronunciation (IPA), part of speech, and main Chinese meanings. For phrases/sentences: give only the Chinese translation. Keep it very short.',
-      },
+      { role: 'system', content: systemPrompt || DEFAULT_PROMPT },
       { role: 'user', content: text },
     ],
-    max_tokens: 150,
+    max_tokens: 400,
     temperature: 0.3,
   })
 

@@ -91,6 +91,18 @@ export function useSettings() {
   return useRecoilState(settingsState)
 }
 
+export type TranslateSource = 'google' | 'llm'
+
+// a saved API endpoint; `model` / `systemPrompt` only apply where they make sense
+export interface ApiPreset {
+  id: string
+  name: string
+  url: string
+  key: string
+  model?: string
+  systemPrompt?: string
+}
+
 export interface TtsConfig {
   ttsEnabled: boolean
   translateEnabled: boolean
@@ -103,6 +115,14 @@ export interface TtsConfig {
   llmApi: { url: string; key: string }
   ttsApi: { url: string; key: string }
   ttsModel: string
+  // multi-source translation; when unset, falls back to `translateMethod`
+  translateSources?: TranslateSource[]
+  // saved API presets; the legacy llmApi/ttsApi/ttsModel fields always mirror
+  // the active preset so older builds (and the server env fallback) keep working
+  llmPresets?: ApiPreset[]
+  llmActiveId?: string
+  ttsPresets?: ApiPreset[]
+  ttsActiveId?: string
   voice: string
   speed: number
   // skip pronunciation when the selection is longer than this (0 = no limit)
@@ -124,6 +144,7 @@ export const defaultTtsConfig: TtsConfig = {
   translateShortcut: 'd',
   ttsShortcut: 's',
   translateMethod: 'llm',
+  translateSources: ['llm'],
   llmApi: { url: '', key: '' },
   ttsApi: { url: '', key: '' },
   ttsModel: 'tts-1',
@@ -144,4 +165,37 @@ const ttsConfigState = atom<TtsConfig>({
 
 export function useTtsConfig() {
   return useRecoilState(ttsConfigState)
+}
+
+// the sources to query for a translation, in display order
+export function activeSources(cfg: TtsConfig): TranslateSource[] {
+  return cfg.translateSources?.length
+    ? cfg.translateSources
+    : [cfg.translateMethod]
+}
+
+// active preset, falling back to the legacy single-config fields
+export function activeLlmPreset(cfg: TtsConfig): ApiPreset {
+  return (
+    cfg.llmPresets?.find((p) => p.id === cfg.llmActiveId) ??
+    cfg.llmPresets?.[0] ?? {
+      id: '',
+      name: '',
+      url: cfg.llmApi.url,
+      key: cfg.llmApi.key,
+    }
+  )
+}
+
+export function activeTtsPreset(cfg: TtsConfig): ApiPreset {
+  return (
+    cfg.ttsPresets?.find((p) => p.id === cfg.ttsActiveId) ??
+    cfg.ttsPresets?.[0] ?? {
+      id: '',
+      name: '',
+      url: cfg.ttsApi.url,
+      key: cfg.ttsApi.key,
+      model: cfg.ttsModel,
+    }
+  )
 }
