@@ -3,16 +3,18 @@ import clsx from 'clsx'
 import { useLiveQuery } from 'dexie-react-hooks'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   MdCheckBox,
   MdCheckBoxOutlineBlank,
   MdCheckCircle,
+  MdOutlineCloudQueue,
   MdOutlineFileDownload,
   MdOutlineShare,
 } from 'react-icons/md'
 import { useSet } from 'react-use'
 import { usePrevious } from 'react-use'
+import useSWR from 'swr'
 
 import { ReaderGridView, Button, TextField, DropZone } from '../components'
 import { BookRecord, CoverRecord, db } from '../db'
@@ -25,7 +27,17 @@ import {
   useRemoteFiles,
   useTranslation,
 } from '../hooks'
+import { useSyncStatus } from '../hooks/remote/useServerSync'
 import { reader, useReaderSnapshot } from '../models'
+import {
+  addTombstone,
+  deleteRemoteFile,
+  downloadFile,
+  listRemoteFiles,
+  pullCovers,
+  pushCovers,
+  uploadFile,
+} from '../server-sync'
 import { lock } from '../styles'
 import { dbx, pack, uploadData } from '../sync'
 import { copy } from '../utils'
@@ -128,6 +140,34 @@ const Library: React.FC = () => {
   const [readyToSync, setReadyToSync] = useState(false)
 
   const { groups } = useReaderSnapshot()
+
+  // self-hosted sync: which epubs exist on the server / locally
+  const syncStatus = useSyncStatus()
+  const serverOn = syncStatus === 'on' || syncStatus === 'unknown'
+  const { data: serverFiles, mutate: mutateServerFiles } = useSWR(
+    serverOn ? 'server-files' : null,
+    () => listRemoteFiles(),
+  )
+  const localFileIds = useLiveQuery(
+    () => db?.files.toCollection().primaryKeys() ?? [],
+  )
+  const localFileSet = new Set((localFileIds ?? []) as string[])
+  const serverFileSet = new Set((serverFiles ?? []).map((f) => f.id))
+
+  // fetch the epub from the server on demand (tap a cloud-only book)
+  const ensureLocalFile = useCallback(async (book: BookRecord) => {
+    if (await db?.files.get(book.id)) return true
+    setLoading(book.id)
+    try {
+      const blob = await downloadFile(book.id)
+      if (!blob) return false
+      await db?.files.put({ id: book.id, file: new File([blob], book.name) })
+      return true
+    } finally {
+      setLoading(undefined)
+    }
+  }, [])
+
 
   useEffect(() => {
     if (previousRemoteFiles && remoteFiles) {
@@ -262,61 +302,133 @@ const Library: React.FC = () => {
 
           <div className="space-x-2">
             {select ? (
-              <>
-                <Button
-                  onClick={async () => {
-                    toggleSelect()
-
-                    for (const book of selectedBooks) {
-                      const remoteFile = remoteFiles?.find(
-                        (f) => f.name === book.name,
-                      )
-                      if (remoteFile) continue
-
-                      const file = await db?.files.get(book.id)
-                      if (!file) continue
-
-                      setLoading(book.id)
-                      await dbx.filesUpload({
-                        path: `/files/${book.name}`,
-                        contents: file.file,
-                      })
-                      setLoading(undefined)
-
-                      mutateRemoteFiles()
-                    }
-                  }}
-                >
-                  {t('upload')}
-                </Button>
-                <Button
-                  onClick={async () => {
-                    toggleSelect()
-                    const bookIds = [...selectedBookIds]
-
-                    db?.books.bulkDelete(bookIds)
-                    db?.covers.bulkDelete(bookIds)
-                    db?.files.bulkDelete(bookIds)
-
-                    // folder data is not updated after `filesDeleteBatch`
-                    mutateRemoteFiles(
-                      async (data) => {
-                        await dbx.filesDeleteBatch({
-                          entries: selectedBooks.map((b) => ({
-                            path: `/files/${b.name}`,
-                          })),
+              serverOn ? (
+                <>
+                  <Button
+                    onClick={async () => {
+                      toggleSelect()
+                      let uploaded = false
+                      for (const book of selectedBooks) {
+                        if (serverFileSet.has(book.id)) continue
+                        const file = await db?.files.get(book.id)
+                        if (!file) continue
+                        setLoading(book.id)
+                        await uploadFile(book.id, file.file)
+                        setLoading(undefined)
+                        uploaded = true
+                      }
+                      if (uploaded) {
+                        const remoteCovers = (await pullCovers()) ?? {}
+                        const locals = (await db?.covers.toArray()) ?? []
+                        locals.forEach((c) => {
+                          remoteCovers[c.id] = c.cover
                         })
-                        return data?.filter(
-                          (f) => !selectedBooks.find((b) => b.name === f.name),
+                        await pushCovers(remoteCovers)
+                        mutateServerFiles()
+                      }
+                    }}
+                  >
+                    {t('upload')}
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      toggleSelect()
+                      for (const book of selectedBooks) {
+                        if (!serverFileSet.has(book.id)) continue
+                        await ensureLocalFile(book)
+                      }
+                    }}
+                  >
+                    {t('download')}
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      toggleSelect()
+                      for (const book of selectedBooks) {
+                        // never drop the only copy: keep the local file
+                        // unless the server holds one
+                        if (!serverFileSet.has(book.id)) continue
+                        await db?.files.delete(book.id)
+                      }
+                    }}
+                  >
+                    {t('remove_local')}
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      toggleSelect()
+                      const bookIds = [...selectedBookIds]
+                      bookIds.forEach((id) => addTombstone(id))
+                      db?.books.bulkDelete(bookIds)
+                      db?.covers.bulkDelete(bookIds)
+                      db?.files.bulkDelete(bookIds)
+                      for (const id of bookIds) {
+                        await deleteRemoteFile(id)
+                      }
+                      mutateServerFiles()
+                    }}
+                  >
+                    {t('delete')}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    onClick={async () => {
+                      toggleSelect()
+
+                      for (const book of selectedBooks) {
+                        const remoteFile = remoteFiles?.find(
+                          (f) => f.name === book.name,
                         )
-                      },
-                      { revalidate: false },
-                    )
-                  }}
-                >
-                  {t('delete')}
-                </Button>
-              </>
+                        if (remoteFile) continue
+
+                        const file = await db?.files.get(book.id)
+                        if (!file) continue
+
+                        setLoading(book.id)
+                        await dbx.filesUpload({
+                          path: `/files/${book.name}`,
+                          contents: file.file,
+                        })
+                        setLoading(undefined)
+
+                        mutateRemoteFiles()
+                      }
+                    }}
+                  >
+                    {t('upload')}
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      toggleSelect()
+                      const bookIds = [...selectedBookIds]
+
+                      db?.books.bulkDelete(bookIds)
+                      db?.covers.bulkDelete(bookIds)
+                      db?.files.bulkDelete(bookIds)
+
+                      // folder data is not updated after `filesDeleteBatch`
+                      mutateRemoteFiles(
+                        async (data) => {
+                          await dbx.filesDeleteBatch({
+                            entries: selectedBooks.map((b) => ({
+                              path: `/files/${b.name}`,
+                            })),
+                          })
+                          return data?.filter(
+                            (f) =>
+                              !selectedBooks.find((b) => b.name === f.name),
+                          )
+                        },
+                        { revalidate: false },
+                      )
+                    }}
+                  >
+                    {t('delete')}
+                  </Button>
+                </>
+              )
             ) : (
               <>
                 <Button
@@ -363,6 +475,9 @@ const Library: React.FC = () => {
               selected={has(book.id)}
               loading={loading === book.id}
               toggle={toggle}
+              localFile={localFileSet.has(book.id)}
+              serverFile={serverOn && serverFileSet.has(book.id)}
+              ensureFile={ensureLocalFile}
             />
           ))}
         </ul>
@@ -378,6 +493,9 @@ interface BookProps {
   selected?: boolean
   loading?: boolean
   toggle: (id: string) => void
+  localFile?: boolean
+  serverFile?: boolean
+  ensureFile?: (book: BookRecord) => Promise<boolean>
 }
 const Book: React.FC<BookProps> = ({
   book,
@@ -386,6 +504,9 @@ const Book: React.FC<BookProps> = ({
   selected,
   loading,
   toggle,
+  localFile,
+  serverFile,
+  ensureFile,
 }) => {
   const remoteFiles = useRemoteFiles()
 
@@ -394,6 +515,9 @@ const Book: React.FC<BookProps> = ({
 
   const cover = covers?.find((c) => c.id === book.id)?.cover
   const remoteFile = remoteFiles.data?.find((f) => f.name === book.name)
+  const synced = !!remoteFile || serverFile
+  // on the server but not on this device yet — tap to download
+  const cloudOnly = !localFile && serverFile
 
   const Icon = selected ? MdCheckBox : MdCheckBoxOutlineBlank
 
@@ -406,6 +530,7 @@ const Book: React.FC<BookProps> = ({
           if (select) {
             toggle(book.id)
           } else {
+            if (cloudOnly && ensureFile && !(await ensureFile(book))) return
             if (mobile) await router.push('/_')
             reader.addTab(book)
           }
@@ -425,9 +550,18 @@ const Book: React.FC<BookProps> = ({
         <img
           src={cover ?? placeholder}
           alt="Cover"
-          className="mx-auto aspect-[2/3] w-full object-contain"
+          className={clsx(
+            'mx-auto aspect-[2/3] w-full object-contain',
+            cloudOnly && 'opacity-50',
+          )}
           draggable={false}
         />
+        {cloudOnly && !select && (
+          <MdOutlineCloudQueue
+            size={16}
+            className="text-outline absolute top-1 left-1"
+          />
+        )}
         {select && (
           <div className="absolute bottom-1 right-1">
             <Icon
@@ -448,7 +582,7 @@ const Book: React.FC<BookProps> = ({
         <MdCheckCircle
           className={clsx(
             'mr-1 mb-0.5 inline',
-            remoteFile ? 'text-tertiary' : 'text-surface-variant',
+            synced ? 'text-tertiary' : 'text-surface-variant',
           )}
           size={16}
         />

@@ -17,6 +17,10 @@ import {
   useSetAction,
   useTranslation,
 } from '../hooks'
+import {
+  useServerLibrarySync,
+  useServerSettingsSync,
+} from '../hooks/remote/useServerSync'
 import { reader, useReaderSnapshot } from '../models'
 import { navbarState } from '../state'
 import { activeClass } from '../styles'
@@ -28,6 +32,8 @@ import { TypographyView } from './viewlets/TypographyView'
 
 export const Layout: React.FC = ({ children }) => {
   useColorScheme()
+  useServerSettingsSync()
+  useServerLibrarySync()
 
   const [ready, setReady] = useState(false)
   const setAction = useSetAction()

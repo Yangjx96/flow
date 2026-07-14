@@ -7,6 +7,8 @@ import {
   useColorScheme,
   useTranslation,
 } from '@flow/reader/hooks'
+import { useSyncStatus } from '@flow/reader/hooks/remote/useServerSync'
+import { setUserEnabled } from '@flow/reader/server-sync'
 import {
   useTtsConfig,
   TtsConfig,
@@ -46,6 +48,7 @@ export const Settings: React.FC = () => {
         <TranslateSettings />
         <TtsSettings />
         <InteractionSettings />
+        <SyncSettings />
 
         <Section title={t('language')}>
           <Select
@@ -400,6 +403,26 @@ const TtsSettings: React.FC = () => {
             </Advanced>
           </>
         )}
+      </div>
+    </Section>
+  )
+}
+
+const SyncSettings: React.FC = () => {
+  const t = useTranslation('settings')
+  const status = useSyncStatus()
+
+  return (
+    <Section title={t('sync')}>
+      <div className="space-y-3">
+        <Checkbox
+          name={t('sync.enable')}
+          checked={status !== 'disabled'}
+          onChange={(e) => setUserEnabled(e.target.checked)}
+        />
+        <p className="text-outline !text-[12px]">
+          {t(`sync.status.${status}`)}
+        </p>
       </div>
     </Section>
   )
