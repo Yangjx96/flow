@@ -29,6 +29,9 @@ interface SelectionPopupProps {
   tab: BookTab
 }
 
+// minimum time the finished translation stays readable before auto-close
+const READ_GRACE = 2500
+
 function loadOffset(): { dx: number; dy: number } | null {
   try {
     const s = localStorage.getItem('popupOffset')
@@ -141,6 +144,8 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   // pronunciation ended before the translation landed; dismiss once it does
   const pendingDismiss = useRef(false)
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // when every translation slot finished (0 = not settled yet)
+  const settledAt = useRef(0)
   const dragging = useRef(false)
   const popupData = useRef<PopupState | null>(null)
   const latestPos = useRef({ left: 0, top: 0 })
@@ -230,10 +235,22 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
     }
   }, [])
 
+  const scheduleDismiss = useCallback(
+    (ms: number) => {
+      if (dismissTimer.current) clearTimeout(dismissTimer.current)
+      dismissTimer.current = setTimeout(() => {
+        pendingDismiss.current = false
+        dismiss(true)
+      }, ms)
+    },
+    [dismiss],
+  )
+
   const translate = useCallback((sel: PopupState) => {
     const c = cfg.current
     if (!c.translateEnabled) return
     cancelPendingDismiss()
+    settledAt.current = 0
     setFading(false)
     setPopup(sel)
     const id = ++reqId.current
@@ -269,7 +286,16 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
         const settled =
           !popupData.current || rs.length === 0 || rs.every((r) => r.done)
         if (settled) {
-          dismiss(true)
+          // no translation box → close right away (original behavior)
+          if (!popupData.current || rs.length === 0) {
+            dismiss(true)
+            return
+          }
+          // keep the translation readable for READ_GRACE before closing
+          const shown = Date.now() - (settledAt.current || Date.now())
+          const wait = Math.max(0, READ_GRACE - shown)
+          if (wait > 0) scheduleDismiss(wait)
+          else dismiss(true)
           return
         }
         pendingDismiss.current = true
@@ -283,17 +309,20 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
         }, 10000)
       })
     },
-    [dismiss],
+    [dismiss, scheduleDismiss],
   )
 
-  // run the deferred auto-dismiss once the last translation result lands
+  // when the last translation result lands: stamp the settle time, and if
+  // the pronunciation already ended, close after a short reading grace
   useEffect(() => {
-    if (!pendingDismiss.current) return
-    if (results.length && results.every((r) => r.done)) {
-      cancelPendingDismiss()
-      dismiss(true)
+    const allDone = results.length > 0 && results.every((r) => r.done)
+    if (!allDone) return
+    if (!settledAt.current) settledAt.current = Date.now()
+    if (pendingDismiss.current) {
+      pendingDismiss.current = false
+      scheduleDismiss(READ_GRACE)
     }
-  }, [results, dismiss, cancelPendingDismiss])
+  }, [results, scheduleDismiss])
 
   // capture selection (drag / click / hover) and optionally auto-trigger
   useEffect(() => {
