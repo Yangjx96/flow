@@ -5,8 +5,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 
 import {
   DEFAULT_TRANSLATE_PROMPT,
-  TRANSLATE_MAX_TOKENS,
-  translatePayloadExtras,
+  reasoningExtras,
 } from '../../api-defaults'
 
 // google answers in ~100ms from this box; LLM relays can take a few seconds
@@ -21,7 +20,7 @@ export default async function handler(
 ) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { text, method, model, systemPrompt } = req.body
+  const { text, method, model, systemPrompt, reasoning } = req.body
   if (!text) return res.status(400).end()
 
   // fall back to server-side env so the key never has to live in the browser
@@ -29,7 +28,7 @@ export default async function handler(
   const apiKey = req.body.apiKey || process.env.LLM_API_KEY
 
   if (method === 'llm' && apiUrl && apiKey) {
-    return llmTranslate(text, apiUrl, apiKey, res, model, systemPrompt)
+    return llmTranslate(text, apiUrl, apiKey, res, model, systemPrompt, reasoning)
   }
   return googleTranslate(text, res)
 }
@@ -77,6 +76,7 @@ function llmTranslate(
   res: NextApiResponse,
   model?: string,
   systemPrompt?: string,
+  reasoning?: string,
 ) {
   const url = new URL(apiUrl)
   const client = url.protocol === 'https:' ? https : http
@@ -86,9 +86,8 @@ function llmTranslate(
       { role: 'system', content: systemPrompt || DEFAULT_TRANSLATE_PROMPT },
       { role: 'user', content: text },
     ],
-    max_tokens: TRANSLATE_MAX_TOKENS,
     temperature: 0.3,
-    ...translatePayloadExtras(apiUrl),
+    ...reasoningExtras(apiUrl, reasoning),
   })
 
   const upstream = client.request(

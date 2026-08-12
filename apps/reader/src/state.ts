@@ -101,6 +101,9 @@ export interface ApiPreset {
   key: string
   model?: string
   systemPrompt?: string
+  // '' / undefined = provider default, 'off' = no thinking,
+  // otherwise an OpenAI-style reasoning_effort tier (minimal…high)
+  reasoning?: string
 }
 
 export interface TtsConfig {

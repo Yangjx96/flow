@@ -1,8 +1,7 @@
 import {
   DEFAULT_TRANSLATE_PROMPT,
   DEFAULT_TTS_MODEL,
-  TRANSLATE_MAX_TOKENS,
-  translatePayloadExtras,
+  reasoningExtras,
 } from './api-defaults'
 import {
   TranslateSource,
@@ -154,7 +153,13 @@ export async function playTts(
 
 async function directLlmTranslate(
   text: string,
-  llm: { url?: string; key?: string; model?: string; systemPrompt?: string },
+  llm: {
+    url?: string
+    key?: string
+    model?: string
+    systemPrompt?: string
+    reasoning?: string
+  },
 ): Promise<string | null> {
   if (!llm.url || !llm.key) return null
   try {
@@ -175,9 +180,8 @@ async function directLlmTranslate(
             },
             { role: 'user', content: text },
           ],
-          max_tokens: TRANSLATE_MAX_TOKENS,
           temperature: 0.3,
-          ...translatePayloadExtras(llm.url),
+          ...reasoningExtras(llm.url, llm.reasoning),
         }),
       },
       DIRECT_TIMEOUT,
@@ -220,6 +224,7 @@ export async function translateText(
           apiKey: llm.key,
           model: llm.model || undefined,
           systemPrompt: llm.systemPrompt || undefined,
+          reasoning: llm.reasoning || undefined,
         }),
       },
       PROXY_TRANSLATE_TIMEOUT,

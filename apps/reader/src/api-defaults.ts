@@ -6,22 +6,26 @@ export const DEFAULT_TRANSLATE_PROMPT =
 
 export const DEFAULT_TTS_MODEL = 'gpt-4o-mini-tts'
 
-// generous because reasoning models spend their completion budget thinking
-// before they write: deepseek-v4 burns 100-300 tokens of reasoning on a
-// simple lookup, and with a tight cap the visible answer comes back empty
-export const TRANSLATE_MAX_TOKENS = 1000
-
-// deepseek's v4 models think by default; a dictionary lookup needs the
-// answer, not the deliberation — thinking eats the token budget and
-// triples latency, so switch it off on their endpoint explicitly
-export function translatePayloadExtras(
-  apiUrl: string,
+// Thinking control, chosen per preset by the user. No max_tokens is sent —
+// reasoning models count their thinking against it, and a capped budget came
+// back as 200 with empty content (the original "silent dash" failure).
+// deepseek only understands its native switch for "off"; every other value
+// is the OpenAI-style reasoning_effort passed through verbatim, so any
+// provider that speaks that dialect works too.
+export function reasoningExtras(
+  apiUrl: string | undefined,
+  reasoning?: string,
 ): Record<string, unknown> {
+  if (!reasoning) return {}
+  let deepseek = false
   try {
-    if (new URL(apiUrl).hostname === 'api.deepseek.com')
-      return { thinking: { type: 'disabled' } }
+    deepseek = new URL(apiUrl || '').hostname === 'api.deepseek.com'
   } catch {}
-  return {}
+  if (reasoning === 'off')
+    return deepseek
+      ? { thinking: { type: 'disabled' } }
+      : { reasoning_effort: 'none' }
+  return { reasoning_effort: reasoning }
 }
 
 // tried in order when the upstream reports the requested model has no

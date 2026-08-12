@@ -187,6 +187,7 @@ const TranslateSettings: React.FC = () => {
                   activeId={activeId}
                   onCommit={commit}
                   showPrompt
+                  showReasoning
                   modelDatalist={[
                     'gpt-4o-mini',
                     'gpt-4o',
@@ -214,6 +215,7 @@ interface PresetManagerProps {
   activeId: string
   onCommit: (presets: ApiPreset[], activeId: string) => void
   showPrompt?: boolean
+  showReasoning?: boolean
   modelDatalist?: string[]
   modelPlaceholder?: string
   urlPlaceholder?: string
@@ -224,6 +226,7 @@ const PresetManager: React.FC<PresetManagerProps> = ({
   activeId,
   onCommit,
   showPrompt,
+  showReasoning,
   modelDatalist,
   modelPlaceholder,
   urlPlaceholder,
@@ -329,6 +332,26 @@ const PresetManager: React.FC<PresetManagerProps> = ({
             <option key={m} value={m} />
           ))}
         />
+        {showReasoning && (
+          <div>
+            <Select
+              name={t('preset.reasoning')}
+              className="w-56"
+              value={active.reasoning ?? ''}
+              onChange={(e) => patchActive({ reasoning: e.target.value })}
+            >
+              <option value="">{t('preset.reasoning.default')}</option>
+              <option value="off">{t('preset.reasoning.off')}</option>
+              <option value="minimal">minimal</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </Select>
+            <p className="text-outline mt-0.5 !text-[11px]">
+              {t('preset.reasoning_hint')}
+            </p>
+          </div>
+        )}
         {showPrompt && (
           <div>
             <Label name={t('preset.prompt')} />
