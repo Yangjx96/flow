@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 
-import { useColorScheme } from '../hooks'
+import { useColorScheme, useTranslation } from '../hooks'
 import { BookTab } from '../models'
 import {
   TranslateSource,
@@ -64,37 +64,102 @@ function saveSize(o: { w: number; h: number }) {
 
 // a "word" stays together across letters, digits, accents and apostrophes;
 // hyphens, dashes, brackets and other punctuation are treated as breaks so a
-// partial selection never reaches across them
+// partial selection never reaches across them. Soft hyphens / zero-width
+// marks are invisible line-break hints publishers embed mid-word
+// ("pre­cision") — they must count as word chars or expansion stops at
+// them; they are stripped before the text is sent anywhere (see `capture`).
 function isWordChar(ch: string | undefined) {
-  return !!ch && /[A-Za-z0-9À-ɏ’']/.test(ch)
+  return !!ch && /[A-Za-z0-9À-ɏ’'\u00AD\u200B-\u200D\uFEFF]/.test(ch)
 }
 
-// grow a (possibly partial) range out to whole words on both ends.
-// strict mode only completes an edge that actually lands inside a word, so a
-// selection ending on a space ("care of the ") is left alone instead of
-// swallowing the next word.
+// true when the two text nodes are separated only by inline elements, i.e.
+// their characters render as one unbroken run ("pre<i>ci</i>sion")
+function onlyInlineBetween(a: Text, b: Text, bIsBefore: boolean): boolean {
+  const doc = a.ownerDocument
+  const win = doc?.defaultView
+  if (!doc || !win) return false
+  const probe = doc.createRange()
+  try {
+    probe.setStart(bIsBefore ? b : a, 0)
+    probe.setEnd(bIsBefore ? a : b, 0)
+  } catch {
+    return false
+  }
+  const ca = probe.commonAncestorContainer
+  for (const text of [a, b]) {
+    let el: Element | null = text.parentElement
+    while (el && el !== ca) {
+      let display = ''
+      try {
+        display = win.getComputedStyle(el).display
+      } catch {}
+      if (!display.startsWith('inline')) return false
+      el = el.parentElement
+    }
+  }
+  return true
+}
+
+// the nearest non-empty text node before/after `node` that continues the
+// same rendered run of text; null when a block boundary sits between
+function adjacentTextNode(node: Text, dir: 'prev' | 'next'): Text | null {
+  const doc = node.ownerDocument
+  const root = doc?.body || doc?.documentElement
+  if (!doc || !root) return null
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  walker.currentNode = node
+  for (;;) {
+    const n = dir === 'prev' ? walker.previousNode() : walker.nextNode()
+    if (!n) return null
+    const t = n as Text
+    if (!t.textContent) continue // zero-length nodes render nothing: skip
+    return onlyInlineBetween(node, t, dir === 'prev') ? t : null
+  }
+}
+
+// grow a (possibly partial) range out to whole words on both ends, following
+// words across text-node boundaries (epub markup regularly splits a word
+// into several nodes). strict mode only completes an edge that actually
+// lands inside a word, so a selection ending on a space ("care of the ") is
+// left alone instead of swallowing the next word.
 function expandRangeToWords(range: Range, strict = false): Range {
   const r = range.cloneRange()
-  const { startContainer, endContainer } = r
-  if (startContainer.nodeType === 3) {
-    const t = startContainer.textContent || ''
+  if (r.startContainer.nodeType === 3) {
+    let node = r.startContainer as Text
     let s = r.startOffset
-    if (!strict || isWordChar(t[s])) {
-      while (s > 0 && isWordChar(t[s - 1])) s--
+    if (!strict || isWordChar((node.textContent || '')[s])) {
+      for (;;) {
+        const t = node.textContent || ''
+        while (s > 0 && isWordChar(t[s - 1])) s--
+        if (s > 0) break
+        const prev = adjacentTextNode(node, 'prev')
+        const pt = prev?.textContent || ''
+        if (!prev || !isWordChar(pt[pt.length - 1])) break
+        node = prev
+        s = pt.length
+      }
+      try {
+        r.setStart(node, s)
+      } catch {}
     }
-    try {
-      r.setStart(startContainer, s)
-    } catch {}
   }
-  if (endContainer.nodeType === 3) {
-    const t = endContainer.textContent || ''
+  if (r.endContainer.nodeType === 3) {
+    let node = r.endContainer as Text
     let e = r.endOffset
-    if (!strict || isWordChar(t[e - 1])) {
-      while (e < t.length && isWordChar(t[e])) e++
+    if (!strict || isWordChar((node.textContent || '')[e - 1])) {
+      for (;;) {
+        const t = node.textContent || ''
+        while (e < t.length && isWordChar(t[e])) e++
+        if (e < t.length) break
+        const next = adjacentTextNode(node, 'next')
+        if (!next || !isWordChar((next.textContent || '')[0])) break
+        node = next
+        e = 0
+      }
+      try {
+        r.setEnd(node, e)
+      } catch {}
     }
-    try {
-      r.setEnd(endContainer, e)
-    } catch {}
   }
   return r
 }
@@ -129,6 +194,7 @@ function selectWordAtPoint(
 export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
   const { iframe } = useSnapshot(tab)
   const { dark } = useColorScheme()
+  const t = useTranslation()
   const [ttsConfig] = useTtsConfig()
   const [popup, setPopup] = useState<PopupState | null>(null)
   const [results, setResults] = useState<SourceResult[]>([])
@@ -353,8 +419,13 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
       const rect = iframeEl.getBoundingClientRect()
       // a multi-line selection carries the epub's source line breaks and
       // indentation; collapse them so the model gets one clean paragraph and
-      // doesn't echo the indent back into the translation
-      const clean = text.replace(/\s+/g, ' ').trim()
+      // doesn't echo the indent back into the translation. Soft hyphens and
+      // zero-width marks are typography hints, not content — strip them so
+      // "pre­cision" reaches the translator/TTS as "precision"
+      const clean = text
+        .replace(/[\u00AD\u200B-\u200D\uFEFF]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
       const data = { text: clean, x: clientX + rect.left, y: clientY + rect.top }
       selection.current = data
       if (c.autoOnSelect) {
@@ -591,7 +662,11 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({ tab }) => {
               }}
             >
               {r.done ? (
-                r.text || <span style={{ color: dim }}>—</span>
+                r.text || (
+                  <span style={{ color: dim }}>
+                    {t('popup.translate_failed')}
+                  </span>
+                )
               ) : (
                 <span style={{ color: dim }}>...</span>
               )}
