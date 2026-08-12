@@ -3,6 +3,14 @@ import https from 'https'
 
 import type { NextApiRequest, NextApiResponse } from 'next'
 
+import { DEFAULT_TRANSLATE_PROMPT } from '../../api-defaults'
+
+// google answers in ~100ms from this box; LLM relays can take a few seconds
+// on long passages. Without these, a black-holed upstream pins the request
+// (and the reader UI) for minutes.
+const GOOGLE_TIMEOUT = 8_000
+const LLM_TIMEOUT = 25_000
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -34,14 +42,15 @@ async function googleTranslate(text: string, res: NextApiResponse) {
 
   try {
     const body = await new Promise<string>((resolve, reject) => {
-      https
-        .get(url, (r) => {
+      const req = https
+        .get(url, { timeout: GOOGLE_TIMEOUT }, (r) => {
           const chunks: Buffer[] = []
           r.on('data', (c: Buffer) => chunks.push(c))
           r.on('end', () => resolve(Buffer.concat(chunks).toString()))
           r.on('error', reject)
         })
         .on('error', reject)
+      req.on('timeout', () => req.destroy(new Error('timeout')))
     })
 
     const data = JSON.parse(body)
@@ -57,9 +66,6 @@ async function googleTranslate(text: string, res: NextApiResponse) {
   }
 }
 
-const DEFAULT_PROMPT =
-  'You are a concise English-Chinese dictionary. For single words: give pronunciation (IPA), part of speech, and main Chinese meanings. For phrases/sentences: give only the Chinese translation. Keep it very short.'
-
 function llmTranslate(
   text: string,
   apiUrl: string,
@@ -73,7 +79,7 @@ function llmTranslate(
   const payload = JSON.stringify({
     model: model || process.env.LLM_MODEL || 'gpt-4o-mini',
     messages: [
-      { role: 'system', content: systemPrompt || DEFAULT_PROMPT },
+      { role: 'system', content: systemPrompt || DEFAULT_TRANSLATE_PROMPT },
       { role: 'user', content: text },
     ],
     max_tokens: 400,
@@ -84,6 +90,7 @@ function llmTranslate(
     url,
     {
       method: 'POST',
+      timeout: LLM_TIMEOUT,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
@@ -109,6 +116,7 @@ function llmTranslate(
     },
   )
 
+  upstream.on('timeout', () => upstream.destroy(new Error('timeout')))
   upstream.on('error', () => res.status(502).end())
   upstream.write(payload)
   upstream.end()

@@ -442,8 +442,8 @@ const TtsSettings: React.FC = () => {
                 presets={presets}
                 activeId={activeId}
                 onCommit={commit}
-                modelDatalist={['tts-1', 'tts-1-hd', 'gpt-4o-mini-tts']}
-                modelPlaceholder="tts-1"
+                modelDatalist={['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd']}
+                modelPlaceholder="gpt-4o-mini-tts"
                 urlPlaceholder="https://api.example.com"
                 urlDefaultPath="/v1/audio/speech"
               />

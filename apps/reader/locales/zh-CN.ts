@@ -78,6 +78,7 @@ export default {
   'settings.translation.google': 'Google（免费）',
   'settings.translation.llm': 'AI 模型',
   'settings.translation.sources': '翻译来源（可多选）',
+  'popup.translate_failed': '翻译失败，可按快捷键重试',
   'settings.preset': '配置',
   'settings.preset.default': '默认',
   'settings.preset.add': '新增',

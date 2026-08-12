@@ -78,6 +78,7 @@ export default {
   'settings.translation.google': 'Google (free)',
   'settings.translation.llm': 'AI model',
   'settings.translation.sources': 'Sources (multi-select)',
+  'popup.translate_failed': 'Translation failed — tap the shortcut to retry',
   'settings.preset': 'Preset',
   'settings.preset.default': 'Default',
   'settings.preset.add': 'Add',

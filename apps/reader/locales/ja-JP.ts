@@ -78,6 +78,7 @@ export default {
   'settings.translation.google': 'Google（無料）',
   'settings.translation.llm': 'AIモデル',
   'settings.translation.sources': '翻訳ソース（複数選択可）',
+  'popup.translate_failed': '翻訳に失敗しました。ショートカットで再試行できます',
   'settings.preset': 'プリセット',
   'settings.preset.default': 'デフォルト',
   'settings.preset.add': '追加',

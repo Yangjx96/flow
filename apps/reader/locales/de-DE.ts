@@ -78,6 +78,7 @@ export default {
   'settings.translation.google': 'Google (kostenlos)',
   'settings.translation.llm': 'KI-Modell',
   'settings.translation.sources': 'Quellen (Mehrfachauswahl)',
+  'popup.translate_failed': 'Übersetzung fehlgeschlagen — mit Kurzbefehl erneut versuchen',
   'settings.preset': 'Voreinstellung',
   'settings.preset.default': 'Standard',
   'settings.preset.add': 'Hinzufügen',

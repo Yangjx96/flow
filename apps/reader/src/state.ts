@@ -147,7 +147,7 @@ export const defaultTtsConfig: TtsConfig = {
   translateSources: ['llm'],
   llmApi: { url: '', key: '' },
   ttsApi: { url: '', key: '' },
-  ttsModel: 'tts-1',
+  ttsModel: 'gpt-4o-mini-tts',
   voice: 'alloy',
   speed: 1.0,
   ttsMaxWords: 30,
