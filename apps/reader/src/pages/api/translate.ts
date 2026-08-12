@@ -3,7 +3,11 @@ import https from 'https'
 
 import type { NextApiRequest, NextApiResponse } from 'next'
 
-import { DEFAULT_TRANSLATE_PROMPT } from '../../api-defaults'
+import {
+  DEFAULT_TRANSLATE_PROMPT,
+  TRANSLATE_MAX_TOKENS,
+  translatePayloadExtras,
+} from '../../api-defaults'
 
 // google answers in ~100ms from this box; LLM relays can take a few seconds
 // on long passages. Without these, a black-holed upstream pins the request
@@ -82,8 +86,9 @@ function llmTranslate(
       { role: 'system', content: systemPrompt || DEFAULT_TRANSLATE_PROMPT },
       { role: 'user', content: text },
     ],
-    max_tokens: 400,
+    max_tokens: TRANSLATE_MAX_TOKENS,
     temperature: 0.3,
+    ...translatePayloadExtras(apiUrl),
   })
 
   const upstream = client.request(

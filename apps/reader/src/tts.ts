@@ -1,4 +1,9 @@
-import { DEFAULT_TRANSLATE_PROMPT, DEFAULT_TTS_MODEL } from './api-defaults'
+import {
+  DEFAULT_TRANSLATE_PROMPT,
+  DEFAULT_TTS_MODEL,
+  TRANSLATE_MAX_TOKENS,
+  translatePayloadExtras,
+} from './api-defaults'
 import {
   TranslateSource,
   TtsConfig,
@@ -170,8 +175,9 @@ async function directLlmTranslate(
             },
             { role: 'user', content: text },
           ],
-          max_tokens: 400,
+          max_tokens: TRANSLATE_MAX_TOKENS,
           temperature: 0.3,
+          ...translatePayloadExtras(llm.url),
         }),
       },
       DIRECT_TIMEOUT,
