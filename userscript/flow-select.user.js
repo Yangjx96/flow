@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flow 划词
 // @namespace    https://github.com/Yangjx96/flow
-// @version      1.0.0
+// @version      1.0.1
 // @description  把 Flow 阅读器的划词翻译和朗读带到普通网页。默认只在经济学人生效，其他网站在设置里添加。
 // @author       Yangjx96
 // @license      AGPL-3.0
@@ -670,6 +670,25 @@
     }
   }
 
+  // the character right after / before a boundary, read from the neighbouring
+  // text node when the boundary sits on a node edge. A drag that starts on the
+  // right half of a drop cap begins after its letter (<span>T|</span><small>wo),
+  // so the first selected character lives in the next node
+  function charAfter(node, offset) {
+    const t = node.textContent || ''
+    if (offset < t.length) return t[offset]
+    const next = adjacentTextNode(node, 'next')
+    return (next && next.textContent[0]) || ''
+  }
+
+  function charBefore(node, offset) {
+    const t = node.textContent || ''
+    if (offset > 0) return t[offset - 1]
+    const prev = adjacentTextNode(node, 'prev')
+    const pt = (prev && prev.textContent) || ''
+    return pt[pt.length - 1] || ''
+  }
+
   // grow a (possibly partial) range out to whole words on both ends, following
   // words across text-node boundaries. strict mode only completes an edge that
   // actually lands inside a word, so a selection ending on a space
@@ -679,7 +698,7 @@
     if (r.startContainer.nodeType === 3) {
       let node = r.startContainer
       let s = r.startOffset
-      if (!strict || isWordChar((node.textContent || '')[s])) {
+      if (!strict || isWordChar(charAfter(node, s))) {
         for (;;) {
           const t = node.textContent || ''
           while (s > 0 && isWordChar(t[s - 1])) s--
@@ -698,7 +717,7 @@
     if (r.endContainer.nodeType === 3) {
       let node = r.endContainer
       let e = r.endOffset
-      if (!strict || isWordChar((node.textContent || '')[e - 1])) {
+      if (!strict || isWordChar(charBefore(node, e))) {
         for (;;) {
           const t = node.textContent || ''
           while (e < t.length && isWordChar(t[e])) e++
