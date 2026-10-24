@@ -5,6 +5,7 @@
 - Monorepo managed by pnpm and Turborepo (`pnpm-workspace.yaml` ties apps and packages together).
 - Apps: `apps/reader` (Next.js ePub client on port 7127) and `apps/website` (marketing Next.js site on 7117).
 - Packages: `packages/internal` (shared React/TS utilities), `packages/tailwind` (Tailwind preset), `packages/epubjs` (vendored reader engine/tests).
+- `userscript/`: standalone Tampermonkey script (Flow 划词) that brings the reader's selection translate + TTS to ordinary sites. Not part of the pnpm workspace or the Docker image, and pushes touching only it skip the image build. Its word snapping, popup and translate/TTS timing are ported from `SelectionPopup.tsx` / `tts.ts`: change those and the script together, and bump its `@version` so installs auto-update. Dev harness: `userscript/dev/harness.html`.
 - Root configs (`tsconfig*.json`, `turbo.json`, `prettier.config.js`) and Docker tooling govern all workspaces.
 - App assets and translations live in their respective `public/` directories; copy `.env.local.example` to `.env.local` per app for secrets.
 

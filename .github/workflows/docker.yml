@@ -3,6 +3,9 @@ name: Build and Push Docker Image
 on:
   push:
     branches: [main]
+    # the userscript ships from raw GitHub, not in the image
+    paths-ignore:
+      - 'userscript/**'
   workflow_dispatch:
 
 env:

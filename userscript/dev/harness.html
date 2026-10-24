@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flow 划词 · 本地调试</title>
+<style>
+  body { margin: 0; background: #fff; color: #121212; }
+  main { max-width: 640px; margin: 72px auto 140vh; padding: 0 16px; font: 19px/1.6 Georgia, "Times New Roman", serif; }
+  h1 { font-size: 34px; line-height: 1.15; }
+  /* the Economist's drop cap + small caps opening */
+  [data-caps="initial"] { float: left; font-size: 3.5rem; height: 3.25rem; line-height: 1; margin: 0.0625rem 0.2rem 0 0; text-transform: uppercase; }
+  #gm-menu { position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 12px; background: #f3f1ec; border-bottom: 1px solid #ddd; font: 12px/1.4 -apple-system, sans-serif; }
+  #gm-menu b { margin-right: 6px; align-self: center; }
+  #gm-menu button { font: inherit; padding: 3px 9px; }
+  input#typing { font: 15px -apple-system, sans-serif; padding: 6px 8px; width: 100%; }
+</style>
+<script>
+  // Dev harness for flow-select.user.js: stands in for the userscript
+  // manager (GM_* APIs) and every network endpoint, so the script runs in a
+  // plain page with no keys and no real requests.
+
+  // test-only: open the closed shadow root so tests can look inside it
+  const realAttach = Element.prototype.attachShadow
+  Element.prototype.attachShadow = function (init) {
+    const root = realAttach.call(this, { ...init, mode: 'open' })
+    if (this.localName === 'flow-select') window.__fsRoot = root
+    return root
+  }
+
+  const PREFIX = 'gm:'
+  const listeners = {}
+  window.GM_getValue = (k, d) => {
+    const v = localStorage.getItem(PREFIX + k)
+    return v === null ? d : JSON.parse(v)
+  }
+  window.GM_setValue = (k, v) => {
+    const old = GM_getValue(k)
+    localStorage.setItem(PREFIX + k, JSON.stringify(v))
+    ;(listeners[k] || []).forEach((fn) => fn(k, old, v, false))
+  }
+  window.GM_addValueChangeListener = (k, fn) => {
+    ;(listeners[k] = listeners[k] || []).push(fn)
+    return k
+  }
+  let menuSeq = 0
+  window.GM_registerMenuCommand = (name, fn) => {
+    const id = ++menuSeq
+    const b = document.createElement('button')
+    b.textContent = name
+    b.dataset.menu = id
+    b.onclick = fn
+    document.getElementById('gm-menu').append(b)
+    return id
+  }
+  window.GM_unregisterMenuCommand = (id) =>
+    document.querySelector(`[data-menu="${id}"]`)?.remove()
+
+  // flip these from the console / tests
+  window.__mock = {
+    llmFail: false,
+    googleFail: false,
+    ttsGone: false,
+    flowLoggedIn: true,
+    delay: { llm: 500, google: 150, tts: 300, flow: 120 },
+  }
+  window.__gmLog = []
+
+  const FLOW_SETTINGS = {
+    data: {
+      ttsConfig3: {
+        ttsEnabled: true,
+        translateEnabled: true,
+        autoOnSelect: true,
+        translateShortcut: 'd',
+        ttsShortcut: 's',
+        translateMethod: 'llm',
+        translateSources: ['google', 'llm'],
+        llmApi: { url: 'https://api.deepseek.com/v1/chat/completions', key: 'sk-test' },
+        ttsApi: { url: 'https://api.oaipro.com/v1/audio/speech', key: 'sk-test' },
+        ttsModel: 'gpt-4o-mini-tts',
+        llmPresets: [{ id: 'ds', name: 'deepseek', url: 'https://api.deepseek.com/v1/chat/completions', key: 'sk-test', model: 'deepseek-v4-flash', reasoning: 'off' }],
+        llmActiveId: 'ds',
+        ttsPresets: [{ id: 'oai', name: 'oaipro', url: 'https://api.oaipro.com/v1/audio/speech', key: 'sk-test', model: '' }],
+        ttsActiveId: 'oai',
+        voice: 'alloy',
+        speed: 1,
+        ttsMaxWords: 30,
+        autoDismiss: true,
+        snapToWords: true,
+        clickSelectsWord: false,
+        hoverSelectsWord: false,
+      },
+    },
+    updatedAt: 1760000000000,
+  }
+
+  // silent mono WAV, so "playback" takes real time without making a sound
+  function silentWav(seconds) {
+    const rate = 8000
+    const n = Math.floor(rate * seconds)
+    const buf = new ArrayBuffer(44 + n * 2)
+    const v = new DataView(buf)
+    const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)))
+    w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE')
+    w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true)
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true)
+    w(36, 'data'); v.setUint32(40, n * 2, true)
+    return buf
+  }
+
+  const JSON_HDR = 'content-type: application/json; charset=utf-8\r\n'
+
+  function respond(opts, status, body, headers = '') {
+    const r = { status, responseHeaders: headers, finalUrl: opts.url }
+    if (opts.responseType === 'arraybuffer') {
+      r.response = typeof body === 'string' ? new TextEncoder().encode(body).buffer : body
+    } else {
+      r.responseText = typeof body === 'string' ? body : ''
+      r.response = r.responseText
+    }
+    opts.onload && opts.onload(r)
+  }
+
+  window.GM_xmlhttpRequest = (opts) => {
+    const u = new URL(opts.url)
+    let body = null
+    try { body = opts.data ? JSON.parse(opts.data) : null } catch {}
+    __gmLog.push({ t: Date.now(), method: opts.method, url: opts.url, body, anonymous: !!opts.anonymous })
+    const later = (ms, fn) => setTimeout(fn, ms)
+    const m = __mock
+    if (u.pathname.endsWith('/chat/completions')) {
+      return later(m.delay.llm, () =>
+        m.llmFail
+          ? respond(opts, 502, 'bad gateway')
+          : respond(opts, 200, JSON.stringify({ choices: [{ message: { content: `AI：${body.messages[1].content}` } }] }), JSON_HDR))
+    }
+    if (u.hostname === 'translate.googleapis.com') {
+      return later(m.delay.google, () =>
+        m.googleFail
+          ? opts.onerror && opts.onerror({})
+          : respond(opts, 200, JSON.stringify([[[`谷歌：${u.searchParams.get('q')}`, u.searchParams.get('q')]]]), JSON_HDR))
+    }
+    if (u.pathname.endsWith('/audio/speech')) {
+      return later(m.delay.tts, () =>
+        m.ttsGone && body.model !== 'tts-1'
+          ? respond(opts, 503, '{"error":{"message":"No available channel for model"}}', JSON_HDR)
+          : respond(opts, 200, silentWav(0.8), 'content-type: audio/wav\r\n'))
+    }
+    if (u.pathname === '/api/sync/settings') {
+      return later(m.delay.flow, () =>
+        m.flowLoggedIn
+          ? respond(opts, 200, JSON.stringify(FLOW_SETTINGS), JSON_HDR)
+          : respond(opts, 401, '<html>sign in</html>', 'content-type: text/html\r\n'))
+    }
+    if (u.pathname === '/api/translate') {
+      return later(m.delay.flow, () =>
+        m.flowLoggedIn
+          ? respond(opts, 200, JSON.stringify({ translation: `代理：${body.text}` }), JSON_HDR)
+          : respond(opts, 401, '<html>sign in</html>', 'content-type: text/html\r\n'))
+    }
+    if (u.pathname === '/api/tts') {
+      return later(m.delay.flow, () =>
+        m.flowLoggedIn
+          ? respond(opts, 200, silentWav(0.8), 'content-type: audio/mpeg\r\n')
+          : respond(opts, 401, '<html>sign in</html>', 'content-type: text/html\r\n'))
+    }
+    later(10, () => opts.onerror && opts.onerror({}))
+  }
+</script>
+</head>
+<body>
+  <div id="gm-menu"><b>油猴菜单（模拟）</b></div>
+  <main>
+    <h1>A sample article for the selection popup</h1>
+    <p data-component="paragraph"><span data-caps="initial">I</span><small>T IS A</small> quiet harbour town with an outsized reputation. Merchants once crowded its docks, and the counting houses along the waterfront still advertise their age in carved stone above the doors.</p>
+    <p data-component="paragraph">Soft hyphens hide inside long words: the pre&shy;ci&shy;sion of its clock&shy;makers was famous. Markup can also split a word, as in an im<i>por</i>tant ledger, and a <a href="#top">hyperlink to nowhere</a> sits mid-sentence.</p>
+    <p data-component="paragraph">Typing here must never fire the shortcuts:</p>
+    <p><input id="typing" placeholder="type d or s here"></p>
+    <p data-component="paragraph">The harbour master keeps a ledger of every ship that docks, noting its cargo, its crew and the weather it met at sea. Generations of clerks have kept the habit going, long after steam replaced sail and containers replaced crates.</p>
+    <p data-component="paragraph">Further down the page there is more text, so that scrolling with the popup open can be checked. The serendipity of a well-kept archive is that it answers questions nobody thought to ask when it was written.</p>
+  </main>
+  <script src="../flow-select.user.js"></script>
+</body>
+</html>
